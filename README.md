@@ -31,7 +31,7 @@ npm run tauri build
 
 - [x] Faz 0 — Tauri 2.0 + React/TS + Vite + Fluent UI iskeleti.
 - [x] Faz 1 — Tek dosya transferi (manuel IP, blake3, atomik yazma).
-- [ ] Faz 2 — Çok dosya pipeline.
+- [x] Faz 2 — Çok dosya / klasör pipeline (tek TCP akışı, ack yok).
 - [ ] Faz 3 — mDNS keşfi.
 - [ ] Faz 4 — UI cilası (Mica, sürükle-bırak, canlı hız).
 
@@ -48,6 +48,22 @@ npm run tauri build
    yeniden adlandırılır.
 
 Beklenen: Gigabit ethernet'te tek 10 GB dosya için ≥ 110 MB/s.
+
+## Faz 2 nasıl test edilir
+
+Gönderici kartında **Klasör** butonuyla bir klasör seç veya **Dosya(lar)** ile birden
+çok dosya seç, "Gönder"e bas. Tüm dosyalar tek bir TCP akışında, ack beklemeden
+ardı ardına aktarılır (`CLAUDE.md` §4.3). Klasör yapısı alıcı tarafta korunur.
+
+Test ipucu — 50.000 küçük dosya:
+
+```powershell
+$root = "$env:TEMP\lanblaze-stress"; New-Item -ItemType Directory -Force $root | Out-Null
+1..50000 | ForEach-Object { Set-Content -NoNewline "$root\$_.txt" ([byte[]](1..2048) -join '') }
+```
+
+Bu klasörü gönder. Protokol RTT'si yüzünden tek haneli MB/s'ye DÜŞMEMELİ; darboğaz
+disk IOPS olmalı.
 
 ## Güvenlik notları (Faz 1)
 

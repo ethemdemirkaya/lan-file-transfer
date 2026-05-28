@@ -156,28 +156,62 @@ pub async fn run_send(app: AppHandle, req: SendRequest) -> TransferResult<()> {
     Ok(())
 }
 
-/// Build a one-file SendRequest from an absolute local file path.
-/// The rel_path becomes the file's basename (forward-slash safe).
-pub fn build_single_file_request(
+/// Build a SendRequest from a set of absolute local paths (files or
+/// directories). Directories are walked recursively; each file's wire path
+/// is `<dir_basename>/<relative path inside dir>`. Standalone files use
+/// their basename. Forward-slash separator is enforced.
+pub fn build_paths_request(
     id: String,
     peer_addr: String,
     device_name: String,
-    file: &Path,
+    paths: &[PathBuf],
 ) -> std::io::Result<SendRequest> {
-    let metadata = std::fs::metadata(file)?;
-    let size = metadata.len();
-    let rel_path = file
-        .file_name()
-        .map(|s| s.to_string_lossy().replace('\\', "/"))
-        .unwrap_or_else(|| "file.bin".to_string());
+    let mut items: Vec<SendItem> = Vec::new();
+    for p in paths {
+        let metadata = std::fs::metadata(p)?;
+        if metadata.is_file() {
+            let rel = basename_or_default(p);
+            items.push(SendItem {
+                local_path: p.clone(),
+                rel_path: rel,
+                size: metadata.len(),
+            });
+        } else if metadata.is_dir() {
+            let root_name = basename_or_default(p);
+            for entry in walkdir::WalkDir::new(p).follow_links(false) {
+                let entry = entry.map_err(|e| {
+                    std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
+                })?;
+                if !entry.file_type().is_file() {
+                    continue;
+                }
+                let abs = entry.path();
+                let rel_in_dir = abs.strip_prefix(p).unwrap_or(abs);
+                let rel_str = rel_in_dir.to_string_lossy().replace('\\', "/");
+                let rel_path = if rel_str.is_empty() {
+                    root_name.clone()
+                } else {
+                    format!("{root_name}/{rel_str}")
+                };
+                let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                items.push(SendItem {
+                    local_path: abs.to_path_buf(),
+                    rel_path,
+                    size,
+                });
+            }
+        }
+    }
     Ok(SendRequest {
         id,
         peer_addr,
         device_name,
-        items: vec![SendItem {
-            local_path: file.to_path_buf(),
-            rel_path,
-            size,
-        }],
+        items,
     })
+}
+
+fn basename_or_default(p: &Path) -> String {
+    p.file_name()
+        .map(|s| s.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_else(|| "item".to_string())
 }

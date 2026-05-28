@@ -15,7 +15,7 @@ use crate::protocol::DEFAULT_PORT;
 use crate::state::AppState;
 use crate::transfer::{
     receiver::start_receiver,
-    sender::{build_single_file_request, run_send},
+    sender::{build_paths_request, run_send},
 };
 
 #[tauri::command]
@@ -91,24 +91,27 @@ async fn stop_receiving(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn send_file(
+async fn send_paths(
     app: AppHandle,
     state: State<'_, AppState>,
     peer_ip: String,
     port: Option<u16>,
-    file_path: String,
+    paths: Vec<String>,
 ) -> Result<String, String> {
+    if paths.is_empty() {
+        return Err("En az bir dosya veya klasör seçin.".into());
+    }
     let device_name = state.settings.lock().unwrap().device_name.clone();
     let port = port.unwrap_or(DEFAULT_PORT);
     let id = Uuid::new_v4().to_string();
     let peer_addr = format!("{peer_ip}:{port}");
-    let req = build_single_file_request(
-        id.clone(),
-        peer_addr,
-        device_name,
-        std::path::Path::new(&file_path),
-    )
-    .map_err(|e| format!("Dosya okunamadı: {e}"))?;
+    let path_bufs: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+    let req = build_paths_request(id.clone(), peer_addr, device_name, &path_bufs)
+        .map_err(|e| format!("Yollar okunamadı: {e}"))?;
+
+    if req.items.is_empty() {
+        return Err("Seçimden gönderilecek dosya çıkmadı.".into());
+    }
 
     tauri::async_runtime::spawn(async move {
         if let Err(e) = run_send(app, req).await {
@@ -137,7 +140,7 @@ pub fn run() {
             get_device_name,
             start_receiving,
             stop_receiving,
-            send_file,
+            send_paths,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

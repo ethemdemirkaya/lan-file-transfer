@@ -28,12 +28,12 @@ export async function stopReceiving(): Promise<void> {
   return invoke<void>("stop_receiving");
 }
 
-export async function sendFile(
+export async function sendPaths(
   peerIp: string,
-  filePath: string,
+  paths: string[],
   port?: number,
 ): Promise<string> {
-  return invoke<string>("send_file", { peerIp, filePath, port });
+  return invoke<string>("send_paths", { peerIp, paths, port });
 }
 
 export type Direction = "send" | "recv";

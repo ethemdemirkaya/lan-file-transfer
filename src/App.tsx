@@ -28,7 +28,7 @@ import {
   onTransferCompleted,
   onTransferProgress,
   onTransferStarted,
-  sendFile,
+  sendPaths,
   startReceiving,
   stopReceiving,
   TransferCompleted,
@@ -135,7 +135,7 @@ function App() {
   // Sender state
   const [peerIp, setPeerIp] = useState<string>("");
   const [peerPort, setPeerPort] = useState<string>("");
-  const [selectedFile, setSelectedFile] = useState<string>("");
+  const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [sendError, setSendError] = useState<string | null>(null);
   const [busySend, setBusySend] = useState<boolean>(false);
 
@@ -223,10 +223,16 @@ function App() {
     const dir = await open({ directory: true, multiple: false });
     if (typeof dir === "string") setSaveDir(dir);
   };
-  const pickFile = async () => {
-    const f = await open({ directory: false, multiple: false });
-    if (typeof f === "string") setSelectedFile(f);
+  const pickFiles = async () => {
+    const f = await open({ directory: false, multiple: true });
+    if (Array.isArray(f)) setSelectedPaths(f);
+    else if (typeof f === "string") setSelectedPaths([f]);
   };
+  const pickFolder = async () => {
+    const f = await open({ directory: true, multiple: false });
+    if (typeof f === "string") setSelectedPaths([f]);
+  };
+  const clearSelection = () => setSelectedPaths([]);
   const handleStart = async () => {
     setReceiverError(null);
     if (!saveDir) {
@@ -257,11 +263,11 @@ function App() {
   const handleSend = async () => {
     setSendError(null);
     if (!peerIp.trim()) return setSendError("IP gir.");
-    if (!selectedFile) return setSendError("Dosya seç.");
+    if (selectedPaths.length === 0) return setSendError("Dosya veya klasör seç.");
     const portNum = peerPort ? Number(peerPort) : undefined;
     setBusySend(true);
     try {
-      await sendFile(peerIp.trim(), selectedFile, portNum);
+      await sendPaths(peerIp.trim(), selectedPaths, portNum);
     } catch (e) {
       setSendError(String(e));
     } finally {
@@ -340,15 +346,27 @@ function App() {
                 placeholder="47813"
               />
             </Field>
-            <Field label="Dosya">
+            <Field label="Gönderilecekler">
               <div className={styles.row}>
                 <Input
-                  value={selectedFile}
-                  placeholder="Dosya seçin"
+                  value={
+                    selectedPaths.length === 0
+                      ? ""
+                      : selectedPaths.length === 1
+                        ? selectedPaths[0]
+                        : `${selectedPaths.length} öğe seçildi`
+                  }
+                  placeholder="Dosya veya klasör seçin"
                   style={{ flex: 1 }}
                   readOnly
                 />
-                <Button onClick={pickFile}>Seç</Button>
+                <Button onClick={pickFiles}>Dosya(lar)</Button>
+                <Button onClick={pickFolder}>Klasör</Button>
+                {selectedPaths.length > 0 && (
+                  <Button appearance="subtle" onClick={clearSelection}>
+                    Temizle
+                  </Button>
+                )}
               </div>
             </Field>
             <div className={styles.row}>
