@@ -35,6 +35,7 @@ npm run tauri build
 - [x] Faz 3 — mDNS keşfi (`_lanblaze._tcp.local.`), peer butonları.
 - [x] Faz 4 — Tek-ekran UI, kurulum sihirbazı, 6 haneli eşleştirme kodu,
   sürükle-bırak, gelen onay diyaloğu (klasör override), Mica.
+- [x] Faz 7 — NSIS installer (`npm run tauri build`).
 
 ## Faz 1 nasıl test edilir
 
