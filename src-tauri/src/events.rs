@@ -1,0 +1,49 @@
+use serde::Serialize;
+
+pub const EVT_TRANSFER_STARTED: &str = "transfer://started";
+pub const EVT_TRANSFER_PROGRESS: &str = "transfer://progress";
+pub const EVT_TRANSFER_COMPLETED: &str = "transfer://completed";
+pub const EVT_RECEIVER_READY: &str = "receiver://ready";
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransferStarted {
+    pub id: String,
+    pub direction: &'static str,
+    pub peer: String,
+    pub file_count: u64,
+    pub total_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransferProgress {
+    pub id: String,
+    pub direction: &'static str,
+    pub current_file: String,
+    pub current_bytes_done: u64,
+    pub current_bytes_total: u64,
+    pub total_bytes_done: u64,
+    pub total_bytes: u64,
+    pub files_done: u64,
+    pub files_total: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransferCompleted {
+    pub id: String,
+    pub direction: &'static str,
+    pub success: bool,
+    pub error: Option<String>,
+    pub elapsed_ms: u64,
+    pub total_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceiverReady {
+    pub port: u16,
+    pub local_ip: Option<String>,
+    pub save_dir: String,
+}

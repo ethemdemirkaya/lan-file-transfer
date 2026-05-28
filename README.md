@@ -29,17 +29,29 @@ npm run tauri build
 
 ## Fazlar
 
-- [x] Faz 0 — Tauri 2.0 + React/TS + Vite + Fluent UI iskeleti, `ping` komutu çalışıyor.
-- [ ] Faz 1 — Tek dosya transferi (manuel IP, blake3).
+- [x] Faz 0 — Tauri 2.0 + React/TS + Vite + Fluent UI iskeleti.
+- [x] Faz 1 — Tek dosya transferi (manuel IP, blake3, atomik yazma).
 - [ ] Faz 2 — Çok dosya pipeline.
 - [ ] Faz 3 — mDNS keşfi.
 - [ ] Faz 4 — UI cilası (Mica, sürükle-bırak, canlı hız).
 
-## Faz 0 nasıl test edilir
+## Faz 1 nasıl test edilir
 
-```bash
-npm install
-npm run tauri dev
-```
+İki cihazda (veya aynı cihazda iki örnek olarak):
 
-Pencere açıldığında "Ping gönder" butonuna bas. `pong from Rust, hello LanBlaze` yanıtı görünmeli.
+1. **Alıcı tarafta:** `npm run tauri dev`. Sol "Alıcı" kartında bir kayıt klasörü seç,
+   "Dinlemeyi başlat"a bas. Üstte `IP:port` (varsayılan `47813`) görünecek.
+2. **Gönderici tarafta:** Aynı pencerede sağdaki "Gönderici" kartına alıcının IP'sini
+   yaz, bir dosya seç, "Gönder"e bas.
+3. Aşağıdaki "Aktif transferler" bölümünde canlı ilerleme + MB/s ve dosya sayısı
+   görünür. Hash eşleşirse alıcı tarafta `.part` dosyası nihai isme atomik olarak
+   yeniden adlandırılır.
+
+Beklenen: Gigabit ethernet'te tek 10 GB dosya için ≥ 110 MB/s.
+
+## Güvenlik notları (Faz 1)
+
+- Alıcı taraf gelen göreli yolları sıkı doğrular (`..`, sürücü harfi, mutlak yol
+  reddedilir) — `CLAUDE.md` §6.
+- Windows Firewall ilk çalıştırmada port için izin isteyebilir; özel ağ için
+  onaylayın.
