@@ -27,6 +27,7 @@ pub struct SendRequest {
     pub id: String,
     pub peer_addr: String,
     pub device_name: String,
+    pub auth_code: String,
     pub items: Vec<SendItem>,
 }
 
@@ -50,6 +51,7 @@ pub async fn run_send(app: AppHandle, req: SendRequest) -> TransferResult<()> {
         os: current_os().to_string(),
         file_count,
         total_bytes,
+        auth_code: req.auth_code.clone(),
     };
     write_json(&mut writer, &hello).await?;
     writer.flush().await?;
@@ -164,6 +166,7 @@ pub fn build_paths_request(
     id: String,
     peer_addr: String,
     device_name: String,
+    auth_code: String,
     paths: &[PathBuf],
 ) -> std::io::Result<SendRequest> {
     let mut items: Vec<SendItem> = Vec::new();
@@ -206,6 +209,7 @@ pub fn build_paths_request(
         id,
         peer_addr,
         device_name,
+        auth_code,
         items,
     })
 }

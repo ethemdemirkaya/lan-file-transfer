@@ -1,7 +1,9 @@
 use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use tauri::{AppHandle, Emitter};
+use std::sync::Arc;
+
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::{TcpListener, TcpStream};
@@ -10,13 +12,16 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::events::{
-    TransferCompleted, TransferProgress, TransferStarted, EVT_TRANSFER_COMPLETED,
-    EVT_TRANSFER_PROGRESS, EVT_TRANSFER_STARTED,
+    IncomingRequest, TransferCompleted, TransferProgress, TransferStarted,
+    EVT_INCOMING_REQUEST, EVT_TRANSFER_COMPLETED, EVT_TRANSFER_PROGRESS, EVT_TRANSFER_STARTED,
 };
 use crate::hash::StreamHasher;
 use crate::protocol::{Hello, HelloAck, CHUNK_SIZE, HASH_LEN};
+use crate::state::{AppState, PendingDecision, UserDecision};
 use crate::transfer::stream::{read_file_header, read_json, write_json};
 use crate::transfer::{TransferError, TransferResult};
+
+const REQUEST_TIMEOUT_SECS: u64 = 120;
 
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -70,6 +75,44 @@ pub async fn start_receiver(
     })
 }
 
+/// Ask the user (via the frontend) whether to accept an incoming transfer.
+/// Returns the user's decision, including an optional override save dir.
+async fn await_user_decision(
+    app: &AppHandle,
+    id: &str,
+    request: IncomingRequest,
+) -> UserDecision {
+    let (tx, rx) = oneshot::channel::<UserDecision>();
+    {
+        let state: tauri::State<'_, AppState> = app.state();
+        state
+            .pending
+            .lock()
+            .unwrap()
+            .insert(id.to_string(), PendingDecision { tx });
+    }
+    if let Err(e) = app.emit(EVT_INCOMING_REQUEST, &request) {
+        warn!("emit incoming failed: {e}");
+    }
+    let timeout = tokio::time::Duration::from_secs(REQUEST_TIMEOUT_SECS);
+    let outcome = tokio::time::timeout(timeout, rx).await;
+    {
+        let state: tauri::State<'_, AppState> = app.state();
+        state.pending.lock().unwrap().remove(id);
+    }
+    match outcome {
+        Ok(Ok(d)) => d,
+        _ => UserDecision {
+            accept: false,
+            override_save_dir: None,
+        },
+    }
+}
+
+// Touch Arc so dropping cleanup compiles cleanly.
+#[allow(dead_code)]
+fn _force_arc(_a: Arc<()>) {}
+
 async fn handle_connection(
     app: AppHandle,
     sock: TcpStream,
@@ -87,15 +130,54 @@ async fn handle_connection(
         hello.device_name, peer, hello.file_count, hello.total_bytes
     );
 
-    // Phase 1: auto-accept. Phase 4 will gate this on a UI dialog.
+    // Verify pairing code before bothering the user.
+    let expected_code = {
+        let state: tauri::State<'_, AppState> = app.state();
+        let code = state.session.lock().unwrap().auth_code.clone();
+        code
+    };
+    if hello.auth_code != expected_code {
+        let ack = HelloAck {
+            accept: false,
+            reason: Some("Yanlış eşleştirme kodu.".into()),
+        };
+        write_json(&mut writer, &ack).await?;
+        writer.flush().await?;
+        warn!(
+            "rejected transfer from {} ({}): bad pairing code",
+            hello.device_name, peer
+        );
+        return Ok(());
+    }
+
+    let id = Uuid::new_v4().to_string();
+    let request = IncomingRequest {
+        id: id.clone(),
+        peer: peer.clone(),
+        device_name: hello.device_name.clone(),
+        os: hello.os.clone(),
+        file_count: hello.file_count,
+        total_bytes: hello.total_bytes,
+    };
+    let decision = await_user_decision(&app, &id, request).await;
     let ack = HelloAck {
-        accept: true,
-        reason: None,
+        accept: decision.accept,
+        reason: if decision.accept {
+            None
+        } else {
+            Some("Kullanıcı reddetti veya zaman aşımı.".into())
+        },
     };
     write_json(&mut writer, &ack).await?;
     writer.flush().await?;
-
-    let id = Uuid::new_v4().to_string();
+    if !decision.accept {
+        return Ok(());
+    }
+    let effective_save_dir = decision.override_save_dir.unwrap_or(save_dir.clone());
+    if !effective_save_dir.is_dir() {
+        tokio::fs::create_dir_all(&effective_save_dir).await?;
+    }
+    let save_dir = effective_save_dir;
     let started_at = Instant::now();
     let total_bytes_expected = hello.total_bytes;
     let files_total = hello.file_count;

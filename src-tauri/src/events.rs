@@ -4,6 +4,8 @@ pub const EVT_TRANSFER_STARTED: &str = "transfer://started";
 pub const EVT_TRANSFER_PROGRESS: &str = "transfer://progress";
 pub const EVT_TRANSFER_COMPLETED: &str = "transfer://completed";
 pub const EVT_RECEIVER_READY: &str = "receiver://ready";
+pub const EVT_INCOMING_REQUEST: &str = "incoming://request";
+pub const EVT_INCOMING_CANCELLED: &str = "incoming://cancelled";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,4 +48,15 @@ pub struct ReceiverReady {
     pub port: u16,
     pub local_ip: Option<String>,
     pub save_dir: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IncomingRequest {
+    pub id: String,
+    pub peer: String,
+    pub device_name: String,
+    pub os: String,
+    pub file_count: u64,
+    pub total_bytes: u64,
 }

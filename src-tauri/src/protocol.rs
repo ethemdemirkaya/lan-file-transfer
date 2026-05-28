@@ -26,6 +26,9 @@ pub struct Hello {
     pub os: String,
     pub file_count: u64,
     pub total_bytes: u64,
+    /// 6-digit pairing code the receiver showed on its screen.
+    #[serde(default)]
+    pub auth_code: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

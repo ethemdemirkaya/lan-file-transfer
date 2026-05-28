@@ -33,7 +33,8 @@ npm run tauri build
 - [x] Faz 1 — Tek dosya transferi (manuel IP, blake3, atomik yazma).
 - [x] Faz 2 — Çok dosya / klasör pipeline (tek TCP akışı, ack yok).
 - [x] Faz 3 — mDNS keşfi (`_lanblaze._tcp.local.`), peer butonları.
-- [ ] Faz 4 — UI cilası (Mica, sürükle-bırak, canlı hız).
+- [x] Faz 4 — Tek-ekran UI, kurulum sihirbazı, 6 haneli eşleştirme kodu,
+  sürükle-bırak, gelen onay diyaloğu (klasör override), Mica.
 
 ## Faz 1 nasıl test edilir
 
@@ -71,6 +72,24 @@ disk IOPS olmalı.
 içinde "Keşfedilen cihazlar" altında karşı tarafın butonu çıkmalı; butona
 tıklayınca IP ve port otomatik dolar. mDNS engelliyse elle IP girmek hâlâ
 çalışır.
+
+## Faz 4 nasıl test edilir
+
+- İlk açılışta kurulum sihirbazı cihaz adı + varsayılan kayıt klasörü ister.
+- Ana ekranın sağ üstünde **6 haneli eşleştirme kodun** görünür — karşı tarafa
+  bunu söylemen / yapıştırman gerek.
+- Dosya veya klasörü pencereye **sürükle-bırak** — ya da Dosya(lar) / Klasör
+  düğmeleriyle seç.
+- Karşı tarafın kodunu gir, **Gönder**.
+- Karşı tarafta bir Fluent diyaloğu çıkar: kabul/ret + "Başka klasöre kaydet".
+- Kod yanlışsa diyalog bile çıkmaz, karşı taraf sessizce reddeder.
+
+**Windows Firewall:** ilk açılışta Defender bir izin penceresi açar. **Özel
+ağlar** kutusunu işaretle ve **Erişime izin ver**'e bas. Otomatik kural eklemek
+admin yetkisi ister, NSIS installer (Faz 7) ile bunu hallederiz.
+
+**Tek bilgisayarla test:** loopback üzerinden kendine gönderebilirsin. Manuel
+IP alanına `127.0.0.1` yaz ve kendi 6 haneli kodunu peer-kod alanına yapıştır.
 
 ## Güvenlik notları (Faz 1)
 
