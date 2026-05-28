@@ -25,9 +25,12 @@ import {
   getDefaultPort,
   getDeviceName,
   getLocalIp,
+  onPeerAdded,
+  onPeerRemoved,
   onTransferCompleted,
   onTransferProgress,
   onTransferStarted,
+  Peer,
   sendPaths,
   startReceiving,
   stopReceiving,
@@ -141,6 +144,7 @@ function App() {
 
   const [active, setActive] = useState<Record<string, ActiveTransfer>>({});
   const [completed, setCompleted] = useState<CompletedRow[]>([]);
+  const [peers, setPeers] = useState<Record<string, Peer>>({});
 
   useEffect(() => {
     (async () => {
@@ -214,6 +218,19 @@ function App() {
         });
       }),
     );
+    unsubs.push(
+      onPeerAdded((p: Peer) => {
+        setPeers((prev) => ({ ...prev, [p.instance]: p }));
+      }),
+    );
+    unsubs.push(
+      onPeerRemoved((instance: string) => {
+        setPeers((prev) => {
+          const { [instance]: _gone, ...rest } = prev;
+          return rest;
+        });
+      }),
+    );
     return () => {
       unsubs.forEach((u) => u.then((fn) => fn()).catch(() => {}));
     };
@@ -276,6 +293,13 @@ function App() {
   };
 
   const activeList = useMemo(() => Object.values(active), [active]);
+  const peerList = useMemo(() => Object.values(peers), [peers]);
+
+  const selectPeer = (p: Peer) => {
+    const ip = p.addresses.find((a) => !a.includes(":")) ?? p.addresses[0] ?? "";
+    setPeerIp(ip);
+    setPeerPort(String(p.port));
+  };
 
   return (
     <FluentProvider theme={theme} style={{ backgroundColor: "transparent" }}>
@@ -332,6 +356,29 @@ function App() {
 
           <Card className={styles.card}>
             <Subtitle2>Gönderici</Subtitle2>
+            <Field label="Keşfedilen cihazlar">
+              {peerList.length === 0 ? (
+                <Body1 className={styles.meta}>
+                  Henüz cihaz görünmüyor. Karşı tarafta da uygulamanın açık ve
+                  alıcının başlatılmış olması gerek (mDNS gerekli). Yoksa IP'yi
+                  elle gir.
+                </Body1>
+              ) : (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {peerList.map((p) => (
+                    <Button
+                      key={p.instance}
+                      appearance={
+                        peerIp === (p.addresses[0] ?? "") ? "primary" : "secondary"
+                      }
+                      onClick={() => selectPeer(p)}
+                    >
+                      {p.deviceName} · {p.addresses[0] ?? "?"}:{p.port}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </Field>
             <Field label="Karşı taraf IP">
               <Input
                 value={peerIp}

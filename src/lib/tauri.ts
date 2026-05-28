@@ -85,4 +85,19 @@ export const onTransferCompleted = (cb: (e: TransferCompleted) => void) =>
 export const onReceiverReady = (cb: (e: ReceiverReady) => void) =>
   listen<ReceiverReady>("receiver://ready", (e) => cb(e.payload));
 
+export interface Peer {
+  instance: string;
+  deviceName: string;
+  os: string;
+  version: string;
+  addresses: string[];
+  port: number;
+}
+
+export const onPeerAdded = (cb: (p: Peer) => void) =>
+  listen<Peer>("peer://added", (e) => cb(e.payload));
+
+export const onPeerRemoved = (cb: (instance: string) => void) =>
+  listen<string>("peer://removed", (e) => cb(e.payload));
+
 export type Unlisten = UnlistenFn;

@@ -32,7 +32,7 @@ npm run tauri build
 - [x] Faz 0 — Tauri 2.0 + React/TS + Vite + Fluent UI iskeleti.
 - [x] Faz 1 — Tek dosya transferi (manuel IP, blake3, atomik yazma).
 - [x] Faz 2 — Çok dosya / klasör pipeline (tek TCP akışı, ack yok).
-- [ ] Faz 3 — mDNS keşfi.
+- [x] Faz 3 — mDNS keşfi (`_lanblaze._tcp.local.`), peer butonları.
 - [ ] Faz 4 — UI cilası (Mica, sürükle-bırak, canlı hız).
 
 ## Faz 1 nasıl test edilir
@@ -64,6 +64,13 @@ $root = "$env:TEMP\lanblaze-stress"; New-Item -ItemType Directory -Force $root |
 
 Bu klasörü gönder. Protokol RTT'si yüzünden tek haneli MB/s'ye DÜŞMEMELİ; darboğaz
 disk IOPS olmalı.
+
+## Faz 3 nasıl test edilir
+
+İki cihazda da uygulamayı aç. Her birinde "Dinlemeyi başlat"a bas. Birkaç saniye
+içinde "Keşfedilen cihazlar" altında karşı tarafın butonu çıkmalı; butona
+tıklayınca IP ve port otomatik dolar. mDNS engelliyse elle IP girmek hâlâ
+çalışır.
 
 ## Güvenlik notları (Faz 1)
 

@@ -1,3 +1,4 @@
+mod discovery;
 mod events;
 mod hash;
 mod protocol;
@@ -10,8 +11,9 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
+use crate::discovery::Discovery;
 use crate::events::{ReceiverReady, EVT_RECEIVER_READY};
-use crate::protocol::DEFAULT_PORT;
+use crate::protocol::{current_os, DEFAULT_PORT};
 use crate::state::AppState;
 use crate::transfer::{
     receiver::start_receiver,
@@ -42,6 +44,7 @@ fn get_device_name(state: State<'_, AppState>) -> String {
 async fn start_receiving(
     app: AppHandle,
     state: State<'_, AppState>,
+    discovery: State<'_, Discovery>,
     save_dir: String,
     port: Option<u16>,
 ) -> Result<u16, String> {
@@ -59,12 +62,16 @@ async fn start_receiving(
         .await
         .map_err(|e| format!("Alıcı başlatılamadı: {e}"))?;
     let actual_port = handle.port;
+    let device_name = state.settings.lock().unwrap().device_name.clone();
     {
         let mut r = state.receiver.lock().unwrap();
         r.running = true;
         r.port = actual_port;
         r.save_dir = Some(dir.clone());
         r.shutdown = Some(handle.shutdown);
+    }
+    if let Err(e) = discovery.advertise(&device_name, current_os(), actual_port) {
+        tracing::warn!("mdns advertise failed: {e}");
     }
     let _ = app.emit(
         EVT_RECEIVER_READY,
@@ -78,7 +85,10 @@ async fn start_receiving(
 }
 
 #[tauri::command]
-async fn stop_receiving(state: State<'_, AppState>) -> Result<(), String> {
+async fn stop_receiving(
+    state: State<'_, AppState>,
+    discovery: State<'_, Discovery>,
+) -> Result<(), String> {
     let shutdown = {
         let mut r = state.receiver.lock().unwrap();
         r.running = false;
@@ -87,6 +97,7 @@ async fn stop_receiving(state: State<'_, AppState>) -> Result<(), String> {
     if let Some(tx) = shutdown {
         let _ = tx.send(());
     }
+    discovery.unadvertise();
     Ok(())
 }
 
@@ -131,6 +142,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             app.manage(AppState::default());
+            let d = Discovery::new();
+            d.start_browser(app.handle().clone());
+            app.manage(d);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
