@@ -46,6 +46,7 @@ import {
   onIncomingRequest,
   onPeerAdded,
   onPeerRemoved,
+  onReceiverReady,
   onTransferCompleted,
   onTransferProgress,
   onTransferStarted,
@@ -220,6 +221,11 @@ function SetupWizard({
     setBusy(true);
     try {
       await saveSettings(name, dir);
+      try {
+        await ensureReceiver();
+      } catch (e) {
+        console.warn("ensureReceiver after setup failed:", e);
+      }
       const fresh = await getSession();
       onDone(fresh);
     } catch (e) {
@@ -287,15 +293,32 @@ function App() {
   useEffect(() => {
     (async () => {
       try {
-        const s = await getSession();
-        setSession(s);
+        let s = await getSession();
         if (s.settings.configured && !s.receiverRunning) {
-          try { await ensureReceiver(); } catch {}
+          try {
+            await ensureReceiver();
+            s = await getSession();
+          } catch (e) {
+            console.warn("ensureReceiver on startup failed:", e);
+          }
         }
+        setSession(s);
       } catch (e) {
         console.error(e);
       }
     })();
+  }, []);
+
+  // Listen for receiver-ready event to refresh session state (port shows up).
+  useEffect(() => {
+    let stop: Unlisten | undefined;
+    onReceiverReady(async () => {
+      try {
+        const s = await getSession();
+        setSession(s);
+      } catch {}
+    }).then((u) => { stop = u; });
+    return () => { stop?.(); };
   }, []);
 
   // Event subscriptions.
@@ -396,6 +419,10 @@ function App() {
     if (!ip) return setSendError("Bir cihaz seç veya IP yaz.");
     if (selectedPaths.length === 0) return setSendError("Dosya veya klasör seç.");
     if (peerCode.replace(/\D/g, "").length !== 6) return setSendError("6 haneli eşleştirme kodunu gir.");
+    // Loopback test: peer is us; make sure our own receiver is up first.
+    if (ip === "127.0.0.1" || ip === "localhost" || (session?.localIp && ip === session.localIp)) {
+      try { await ensureReceiver(); } catch (e) { return setSendError(`Alıcı başlatılamadı: ${e}`); }
+    }
     setBusySend(true);
     try {
       await sendPaths(ip, selectedPaths, peerCode.replace(/\D/g, ""), port);
@@ -450,6 +477,33 @@ function App() {
               <b>{session.settings.deviceName}</b> · {session.localIp ?? "—"}
               {session.receiverPort != null ? `:${session.receiverPort}` : ""}
             </Body1>
+            <Caption1 className={styles.meta}>
+              {session.receiverRunning ? (
+                <span style={{ color: tokens.colorPaletteGreenForeground1 }}>
+                  ● Dinleniyor
+                </span>
+              ) : (
+                <span style={{ color: tokens.colorPaletteRedForeground1 }}>
+                  ● Dinlemiyor
+                  {"  "}
+                  <Button
+                    size="small"
+                    appearance="primary"
+                    onClick={async () => {
+                      try {
+                        await ensureReceiver();
+                        const s = await getSession();
+                        setSession(s);
+                      } catch (e) {
+                        console.error(e);
+                      }
+                    }}
+                  >
+                    Dinlemeye başla
+                  </Button>
+                </span>
+              )}
+            </Caption1>
             <Caption1 className={styles.meta}>
               Kayıt klasörü: {session.settings.saveDir}
               {"  "}
