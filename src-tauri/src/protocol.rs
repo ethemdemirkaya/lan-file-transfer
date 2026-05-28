@@ -14,10 +14,16 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 pub const DEFAULT_PORT: u16 = 47813;
 pub const CHUNK_SIZE: usize = 256 * 1024;
 pub const HASH_LEN: usize = 32;
+
+/// Files below this size do not use the resume handshake — the extra RTT
+/// would crater throughput in the 50 000 small files scenario. Above the
+/// threshold a sender pays one RTT per file in exchange for being able to
+/// resume from a partial `.part` left behind by an aborted run.
+pub const RESUME_THRESHOLD: u64 = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Hello {

@@ -46,11 +46,15 @@ where
     Ok(value)
 }
 
-/// Write a per-file header: `u16 path_len` + path bytes + `u64 file_size`.
+/// Write a per-file header: `u16 path_len` + path bytes + `u64 file_size`
+/// + `u8 resumable`. `resumable == 1` means the receiver will reply with a
+/// `u64` resume offset; `0` means it won't and the sender streams the whole
+/// file. See protocol.rs for the threshold rationale.
 pub async fn write_file_header<W>(
     w: &mut W,
     rel_path: &str,
     file_size: u64,
+    resumable: bool,
 ) -> TransferResult<()>
 where
     W: AsyncWrite + Unpin,
@@ -65,7 +69,28 @@ where
     w.write_all(&(path_bytes.len() as u16).to_le_bytes()).await?;
     w.write_all(path_bytes).await?;
     w.write_all(&file_size.to_le_bytes()).await?;
+    w.write_all(&[u8::from(resumable)]).await?;
     Ok(())
+}
+
+/// Receiver → sender: how many bytes already exist on disk for a resumable
+/// file. Sender must skip exactly this many bytes from the start of the
+/// file before writing the rest, but still hashes the whole file.
+pub async fn write_resume_offset<W>(w: &mut W, offset: u64) -> TransferResult<()>
+where
+    W: AsyncWrite + Unpin,
+{
+    w.write_all(&offset.to_le_bytes()).await?;
+    Ok(())
+}
+
+pub async fn read_resume_offset<R>(r: &mut R) -> TransferResult<u64>
+where
+    R: AsyncRead + Unpin,
+{
+    let mut buf = [0u8; 8];
+    r.read_exact(&mut buf).await?;
+    Ok(u64::from_le_bytes(buf))
 }
 
 /// Write end-of-stream marker: `u16 0`.
@@ -81,6 +106,7 @@ where
 pub struct FileHeader {
     pub rel_path: String,
     pub file_size: u64,
+    pub resumable: bool,
 }
 
 /// Read a per-file header. Returns `None` at end-of-stream (path_len == 0).
@@ -101,5 +127,11 @@ where
     let mut size_buf = [0u8; 8];
     r.read_exact(&mut size_buf).await?;
     let file_size = u64::from_le_bytes(size_buf);
-    Ok(Some(FileHeader { rel_path, file_size }))
+    let mut flag = [0u8; 1];
+    r.read_exact(&mut flag).await?;
+    Ok(Some(FileHeader {
+        rel_path,
+        file_size,
+        resumable: flag[0] != 0,
+    }))
 }

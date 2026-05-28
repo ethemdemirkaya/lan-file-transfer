@@ -17,6 +17,7 @@ use crate::events::{
 };
 use crate::hash::StreamHasher;
 use crate::protocol::{Hello, HelloAck, CHUNK_SIZE, HASH_LEN};
+use crate::transfer::stream::write_resume_offset;
 use crate::state::{AppState, PendingDecision, UserDecision};
 use crate::transfer::stream::{read_file_header, read_json, write_json};
 use crate::transfer::{TransferError, TransferResult};
@@ -207,21 +208,72 @@ async fn handle_connection(
                 tokio::fs::create_dir_all(parent).await?;
             }
             let part_path = make_part_path(&final_path);
+
+            // Resume handshake: for big files, tell the sender how many bytes
+            // we already have on disk so it can skip them. Reject mismatched
+            // .part files (those bigger than expected) by deleting them.
+            let mut resume_offset: u64 = 0;
+            if header.resumable {
+                if let Ok(meta) = tokio::fs::metadata(&part_path).await {
+                    if meta.is_file() && meta.len() <= header.file_size {
+                        resume_offset = meta.len();
+                    } else {
+                        let _ = tokio::fs::remove_file(&part_path).await;
+                    }
+                }
+                write_resume_offset(&mut writer, resume_offset).await?;
+                writer.flush().await?;
+            } else {
+                // Non-resumable files always start fresh; nuke any stale .part.
+                let _ = tokio::fs::remove_file(&part_path).await;
+            }
             partial_files.push(part_path.clone());
+
+            // Hash already-on-disk bytes (so the final blake3 covers the full
+            // file even when we resumed mid-way).
+            let mut hasher = StreamHasher::new();
+            if resume_offset > 0 {
+                let mut pf = BufReader::with_capacity(
+                    CHUNK_SIZE,
+                    File::open(&part_path).await?,
+                );
+                let mut tmp = vec![0u8; CHUNK_SIZE];
+                let mut read = 0u64;
+                while read < resume_offset {
+                    let want = (resume_offset - read).min(tmp.len() as u64) as usize;
+                    let n = pf.read(&mut tmp[..want]).await?;
+                    if n == 0 {
+                        return Err(TransferError::Protocol(
+                            ".part shrunk during resume".into(),
+                        ));
+                    }
+                    hasher.update(&tmp[..n]);
+                    read += n as u64;
+                }
+            }
 
             let mut out = BufWriter::with_capacity(
                 CHUNK_SIZE,
-                OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .truncate(true)
-                    .open(&part_path)
-                    .await?,
+                if resume_offset > 0 {
+                    OpenOptions::new()
+                        .append(true)
+                        .open(&part_path)
+                        .await?
+                } else {
+                    OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(&part_path)
+                        .await?
+                },
             );
 
-            let mut hasher = StreamHasher::new();
-            let mut remaining = header.file_size;
-            let mut file_done: u64 = 0;
+            // Count resumed bytes toward both per-file and total progress so
+            // the bar starts where it left off instead of at zero.
+            let mut file_done: u64 = resume_offset;
+            total_done = total_done.saturating_add(resume_offset);
+            let mut remaining = header.file_size - resume_offset;
 
             while remaining > 0 {
                 let want = remaining.min(buf.len() as u64) as usize;
@@ -265,8 +317,6 @@ async fn handle_connection(
             }
 
             tokio::fs::rename(&part_path, &final_path).await?;
-            // Only mark as 'kept' after successful rename. If we crash mid-loop
-            // any later .part still in partial_files will be cleaned up below.
             if let Some(pos) = partial_files.iter().position(|p| p == &part_path) {
                 partial_files.remove(pos);
             }
@@ -308,10 +358,11 @@ async fn handle_connection(
             Ok(())
         }
         Err(e) => {
-            // Cleanup partial files.
-            for p in &partial_files {
-                let _ = tokio::fs::remove_file(p).await;
-            }
+            // Intentionally NOT deleting `.part` files on error: with resume
+            // support the next transfer should pick up where this one left
+            // off. Stale non-resumable .parts are wiped at the start of the
+            // next attempt for the same file (see the `truncate(true)` /
+            // explicit remove above).
             let msg = format!("{e}");
             let _ = app.emit(
                 EVT_TRANSFER_COMPLETED,
