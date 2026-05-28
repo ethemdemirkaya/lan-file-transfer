@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "LanBlaze",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "com.ethem.lanblaze",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -47,9 +47,17 @@
     "windows": {
       "webviewInstallMode": { "type": "downloadBootstrapper" },
       "nsis": {
-        "installMode": "currentUser",
-        "languages": ["Turkish", "English"],
-        "displayLanguageSelector": false
+        "installMode": "both",
+        "languages": [
+          "English", "Turkish", "Spanish", "German", "French",
+          "Japanese", "SimpChinese", "Russian", "PortugueseBR", "Arabic"
+        ],
+        "displayLanguageSelector": true,
+        "startMenuFolder": "LanBlaze",
+        "headerImage": "installer/header.bmp",
+        "sidebarImage": "installer/sidebar.bmp",
+        "installerIcon": "installer/installer.ico",
+        "compression": "lzma"
       }
     }
   }

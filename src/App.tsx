@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   FluentProvider,
   webLightTheme,
@@ -27,6 +28,11 @@ import {
   Badge,
   Divider,
   Tooltip,
+  Menu,
+  MenuTrigger,
+  MenuPopover,
+  MenuList,
+  MenuItem,
   makeStyles,
   shorthands,
   tokens,
@@ -40,6 +46,7 @@ import {
   CloudArrowUp48Regular,
   Edit20Regular,
   Wifi120Regular,
+  LocalLanguage20Regular,
 } from "@fluentui/react-icons";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -65,9 +72,10 @@ import {
   TransferStarted,
   Unlisten,
 } from "./lib/tauri";
+import { SUPPORTED_LANGS, setLang } from "./i18n";
 
 // ---------------------------------------------------------------------------
-// Styles — soft, low-shadow, Mica-friendly. No gradients.
+// Styles
 // ---------------------------------------------------------------------------
 
 const useStyles = makeStyles({
@@ -87,273 +95,131 @@ const useStyles = makeStyles({
     borderBottomStyle: "solid",
     borderBottomColor: tokens.colorNeutralStroke3,
   },
-  topbarLeft: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "2px",
-  },
-  topbarRight: {
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalL,
-  },
+  topbarLeft: { display: "flex", flexDirection: "column", gap: "2px" },
+  topbarRight: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalL },
   brand: {
-    fontWeight: 600,
-    fontSize: "14px",
-    color: tokens.colorNeutralForeground2,
-    letterSpacing: "0.04em",
+    fontWeight: 600, fontSize: "14px",
+    color: tokens.colorNeutralForeground2, letterSpacing: "0.04em",
   },
-  device: {
-    fontSize: "20px",
-    fontWeight: 600,
-  },
+  device: { fontSize: "20px", fontWeight: 600 },
   statusRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
+    display: "flex", alignItems: "center", gap: "6px",
     fontVariantNumeric: "tabular-nums",
   },
-  codeBlock: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-end",
-    gap: "2px",
-  },
+  codeBlock: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" },
   codeLabel: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: "11px",
-    letterSpacing: "0.06em",
-    textTransform: "uppercase",
+    color: tokens.colorNeutralForeground3, fontSize: "11px",
+    letterSpacing: "0.06em", textTransform: "uppercase",
   },
-  codeValueRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalS,
-  },
+  codeValueRow: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS },
   codeValue: {
-    fontSize: "28px",
-    fontWeight: 600,
-    letterSpacing: "0.22em",
-    fontVariantNumeric: "tabular-nums",
-    color: tokens.colorNeutralForeground1,
+    fontSize: "28px", fontWeight: 600, letterSpacing: "0.22em",
+    fontVariantNumeric: "tabular-nums", color: tokens.colorNeutralForeground1,
   },
   main: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
+    flex: 1, display: "flex", flexDirection: "column",
     gap: tokens.spacingVerticalXL,
     ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalXXXL),
-    maxWidth: "920px",
-    width: "100%",
-    marginLeft: "auto",
-    marginRight: "auto",
-    boxSizing: "border-box",
+    maxWidth: "920px", width: "100%",
+    marginLeft: "auto", marginRight: "auto", boxSizing: "border-box",
   },
   sectionHead: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
+    display: "flex", alignItems: "center", justifyContent: "space-between",
     marginBottom: tokens.spacingVerticalXS,
   },
   sectionLabel: {
-    color: tokens.colorNeutralForeground2,
-    fontSize: "12px",
-    fontWeight: 600,
-    letterSpacing: "0.06em",
-    textTransform: "uppercase",
+    color: tokens.colorNeutralForeground2, fontSize: "12px",
+    fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
   },
   dropZone: {
     borderRadius: tokens.borderRadiusXLarge,
     backgroundColor: tokens.colorNeutralBackground2,
-    borderTopWidth: "1px",
-    borderRightWidth: "1px",
-    borderBottomWidth: "1px",
-    borderLeftWidth: "1px",
-    borderTopStyle: "dashed",
-    borderRightStyle: "dashed",
-    borderBottomStyle: "dashed",
-    borderLeftStyle: "dashed",
-    borderTopColor: tokens.colorNeutralStroke2,
-    borderRightColor: tokens.colorNeutralStroke2,
-    borderBottomColor: tokens.colorNeutralStroke2,
-    borderLeftColor: tokens.colorNeutralStroke2,
+    borderTopWidth: "1px", borderRightWidth: "1px",
+    borderBottomWidth: "1px", borderLeftWidth: "1px",
+    borderTopStyle: "dashed", borderRightStyle: "dashed",
+    borderBottomStyle: "dashed", borderLeftStyle: "dashed",
+    borderTopColor: tokens.colorNeutralStroke2, borderRightColor: tokens.colorNeutralStroke2,
+    borderBottomColor: tokens.colorNeutralStroke2, borderLeftColor: tokens.colorNeutralStroke2,
     ...shorthands.padding("44px", tokens.spacingHorizontalXXL),
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
     gap: tokens.spacingVerticalS,
-    transitionDuration: "180ms",
-    transitionTimingFunction: "ease-out",
+    transitionDuration: "180ms", transitionTimingFunction: "ease-out",
     transitionProperty: "background-color, border-color, transform",
     minHeight: "180px",
-    cursor: "default",
   },
   dropZoneActive: {
     backgroundColor: tokens.colorBrandBackground2,
-    borderTopColor: tokens.colorBrandStroke2,
-    borderRightColor: tokens.colorBrandStroke2,
-    borderBottomColor: tokens.colorBrandStroke2,
-    borderLeftColor: tokens.colorBrandStroke2,
+    borderTopColor: tokens.colorBrandStroke2, borderRightColor: tokens.colorBrandStroke2,
+    borderBottomColor: tokens.colorBrandStroke2, borderLeftColor: tokens.colorBrandStroke2,
   },
   dropZoneFilled: {
-    borderTopStyle: "solid",
-    borderRightStyle: "solid",
-    borderBottomStyle: "solid",
-    borderLeftStyle: "solid",
-    borderTopColor: tokens.colorNeutralStroke2,
-    borderRightColor: tokens.colorNeutralStroke2,
-    borderBottomColor: tokens.colorNeutralStroke2,
-    borderLeftColor: tokens.colorNeutralStroke2,
+    borderTopStyle: "solid", borderRightStyle: "solid",
+    borderBottomStyle: "solid", borderLeftStyle: "solid",
     backgroundColor: tokens.colorNeutralBackground1,
   },
-  dropIcon: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: "44px",
-  },
-  dropTitle: {
-    fontSize: "16px",
-    fontWeight: 500,
-    color: tokens.colorNeutralForeground1,
-  },
-  dropHint: {
-    color: tokens.colorNeutralForeground3,
-  },
-  dropActions: {
-    marginTop: tokens.spacingVerticalS,
-    display: "flex",
-    gap: tokens.spacingHorizontalS,
-  },
-  fileList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "2px",
-    width: "100%",
-    maxWidth: "560px",
-  },
+  dropIcon: { color: tokens.colorNeutralForeground3, fontSize: "44px" },
+  dropTitle: { fontSize: "16px", fontWeight: 500, color: tokens.colorNeutralForeground1 },
+  dropHint: { color: tokens.colorNeutralForeground3 },
+  dropActions: { marginTop: tokens.spacingVerticalS, display: "flex", gap: tokens.spacingHorizontalS },
+  fileList: { display: "flex", flexDirection: "column", gap: "2px", width: "100%", maxWidth: "560px" },
   fileRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalS,
+    display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS,
     ...shorthands.padding("6px", tokens.spacingHorizontalS),
     borderRadius: tokens.borderRadiusMedium,
   },
   filePath: {
-    flex: 1,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-    fontSize: "13px",
-    color: tokens.colorNeutralForeground2,
+    flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+    fontSize: "13px", color: tokens.colorNeutralForeground2,
   },
   peerGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+    display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
     gap: tokens.spacingHorizontalM,
   },
   peerTile: {
     ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM),
     borderRadius: tokens.borderRadiusLarge,
     backgroundColor: tokens.colorNeutralBackground2,
-    borderTopWidth: "1px",
-    borderRightWidth: "1px",
-    borderBottomWidth: "1px",
-    borderLeftWidth: "1px",
-    borderTopStyle: "solid",
-    borderRightStyle: "solid",
-    borderBottomStyle: "solid",
-    borderLeftStyle: "solid",
-    borderTopColor: tokens.colorTransparentStroke,
-    borderRightColor: tokens.colorTransparentStroke,
-    borderBottomColor: tokens.colorTransparentStroke,
-    borderLeftColor: tokens.colorTransparentStroke,
+    borderTopWidth: "1px", borderRightWidth: "1px",
+    borderBottomWidth: "1px", borderLeftWidth: "1px",
+    borderTopStyle: "solid", borderRightStyle: "solid",
+    borderBottomStyle: "solid", borderLeftStyle: "solid",
+    borderTopColor: tokens.colorTransparentStroke, borderRightColor: tokens.colorTransparentStroke,
+    borderBottomColor: tokens.colorTransparentStroke, borderLeftColor: tokens.colorTransparentStroke,
     cursor: "pointer",
-    transitionDuration: "120ms",
-    transitionTimingFunction: "ease-out",
+    transitionDuration: "120ms", transitionTimingFunction: "ease-out",
     transitionProperty: "background-color, border-color",
-    display: "flex",
-    flexDirection: "column",
-    gap: "4px",
-  },
-  peerTileHover: {
-    backgroundColor: tokens.colorNeutralBackground2Hover,
+    display: "flex", flexDirection: "column", gap: "4px",
   },
   peerTileActive: {
-    borderTopColor: tokens.colorBrandStroke1,
-    borderRightColor: tokens.colorBrandStroke1,
-    borderBottomColor: tokens.colorBrandStroke1,
-    borderLeftColor: tokens.colorBrandStroke1,
+    borderTopColor: tokens.colorBrandStroke1, borderRightColor: tokens.colorBrandStroke1,
+    borderBottomColor: tokens.colorBrandStroke1, borderLeftColor: tokens.colorBrandStroke1,
     backgroundColor: tokens.colorBrandBackground2,
   },
-  peerName: {
-    fontWeight: 600,
-    fontSize: "14px",
-  },
-  peerMeta: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: "12px",
-    fontVariantNumeric: "tabular-nums",
-  },
-  emptyHint: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: "13px",
-  },
+  peerName: { fontWeight: 600, fontSize: "14px" },
+  peerMeta: { color: tokens.colorNeutralForeground3, fontSize: "12px", fontVariantNumeric: "tabular-nums" },
+  emptyHint: { color: tokens.colorNeutralForeground3, fontSize: "13px" },
   composeRow: {
-    display: "grid",
-    gridTemplateColumns: "1fr auto",
-    gap: tokens.spacingHorizontalM,
-    alignItems: "end",
+    display: "grid", gridTemplateColumns: "1fr auto",
+    gap: tokens.spacingHorizontalM, alignItems: "end",
   },
-  codeInputWrap: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "4px",
-  },
-  sendButton: {
-    alignSelf: "stretch",
-  },
-  transferRow: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "4px",
-    ...shorthands.padding(tokens.spacingVerticalS, "0"),
-  },
-  transferHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    fontSize: "13px",
-  },
+  codeInputWrap: { display: "flex", flexDirection: "column", gap: "4px" },
+  sendButton: { alignSelf: "stretch" },
+  transferRow: { display: "flex", flexDirection: "column", gap: "4px", ...shorthands.padding(tokens.spacingVerticalS, "0") },
+  transferHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px" },
   historyRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    fontSize: "12px",
-    color: tokens.colorNeutralForeground3,
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    fontSize: "12px", color: tokens.colorNeutralForeground3,
     ...shorthands.padding("2px", "0"),
   },
-  setupRoot: {
-    flex: 1,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    ...shorthands.padding(tokens.spacingVerticalXXL),
-  },
+  setupRoot: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", ...shorthands.padding(tokens.spacingVerticalXXL) },
   setupCard: {
-    width: "100%",
-    maxWidth: "440px",
-    display: "flex",
-    flexDirection: "column",
+    width: "100%", maxWidth: "440px", display: "flex", flexDirection: "column",
     gap: tokens.spacingVerticalL,
-    ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalXXL),
+    ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalXXXL),
     backgroundColor: tokens.colorNeutralBackground1,
     borderRadius: tokens.borderRadiusXLarge,
   },
-  manualIp: {
-    display: "flex",
-    gap: tokens.spacingHorizontalS,
-    alignItems: "center",
-  },
+  manualIp: { display: "flex", gap: tokens.spacingHorizontalS, alignItems: "center" },
 });
 
 // ---------------------------------------------------------------------------
@@ -385,6 +251,33 @@ function formatBytes(n: number): string {
 function basename(p: string): string {
   const parts = p.split(/[\\/]/);
   return parts[parts.length - 1] || p;
+}
+
+// ---------------------------------------------------------------------------
+// Language picker
+// ---------------------------------------------------------------------------
+
+function LanguagePicker() {
+  const { i18n } = useTranslation();
+  const current = SUPPORTED_LANGS.find((l) => l.code === i18n.language)?.name ?? "English";
+  return (
+    <Menu>
+      <MenuTrigger disableButtonEnhancement>
+        <Button appearance="subtle" size="small" icon={<LocalLanguage20Regular />}>
+          {current}
+        </Button>
+      </MenuTrigger>
+      <MenuPopover>
+        <MenuList>
+          {SUPPORTED_LANGS.map((l) => (
+            <MenuItem key={l.code} onClick={() => setLang(l.code)}>
+              {l.name}
+            </MenuItem>
+          ))}
+        </MenuList>
+      </MenuPopover>
+    </Menu>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -430,6 +323,7 @@ function SetupWizard({
 }) {
   const styles = useStyles();
   const theme = useSystemTheme();
+  const { t } = useTranslation();
   const [name, setName] = useState(initial.settings.deviceName);
   const [dir, setDir] = useState(initial.settings.saveDir);
   const [busy, setBusy] = useState(false);
@@ -457,33 +351,28 @@ function SetupWizard({
   return (
     <FluentProvider theme={theme} style={{ backgroundColor: "transparent" }}>
       <div className={styles.app}>
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: 12 }}>
+          <LanguagePicker />
+        </div>
         <div className={styles.setupRoot}>
           <div className={styles.setupCard}>
             <div>
-              <div className={styles.brand}>LANBLAZE</div>
-              <Title2>Hoş geldin</Title2>
+              <div className={styles.brand}>{t("setup.brand")}</div>
+              <Title2>{t("setup.title")}</Title2>
             </div>
             <Body1 style={{ color: tokens.colorNeutralForeground3 }}>
-              Aynı yerel ağdaki cihazlarla bulutsuz, hızlı dosya aktarımı. Önce
-              birkaç şey belirleyelim — sonra değiştirebilirsin.
+              {t("setup.desc")}
             </Body1>
-            <Field label="Bu cihazın adı">
+            <Field label={t("setup.deviceName")}>
               <Input value={name} onChange={(_, d) => setName(d.value)} />
             </Field>
             <Field
-              label="Gelen dosyaların kaydedileceği klasör"
-              hint="Her aktarımda farklı bir klasör de seçebilirsin."
+              label={t("setup.saveDir")}
+              hint={t("setup.saveDirHint")}
             >
               <div className={styles.manualIp}>
-                <Input
-                  value={dir}
-                  onChange={(_, d) => setDir(d.value)}
-                  style={{ flex: 1 }}
-                  readOnly
-                />
-                <Button icon={<Folder20Regular />} onClick={pickDir}>
-                  Seç
-                </Button>
+                <Input value={dir} onChange={(_, d) => setDir(d.value)} style={{ flex: 1 }} readOnly />
+                <Button icon={<Folder20Regular />} onClick={pickDir}>{t("common.select")}</Button>
               </div>
             </Field>
             {error && (
@@ -493,7 +382,7 @@ function SetupWizard({
             )}
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <Button appearance="primary" onClick={handleSave} disabled={busy}>
-                {busy ? "Hazırlanıyor..." : "Başla"}
+                {busy ? t("setup.preparing") : t("setup.start")}
               </Button>
             </div>
           </div>
@@ -504,7 +393,7 @@ function SetupWizard({
 }
 
 // ---------------------------------------------------------------------------
-// Drop zone
+// DropZone
 // ---------------------------------------------------------------------------
 
 function DropZone({
@@ -523,29 +412,24 @@ function DropZone({
   onRemoveOne: (p: string) => void;
 }) {
   const styles = useStyles();
+  const { t } = useTranslation();
   const isFilled = paths.length > 0;
   const classes = [
     styles.dropZone,
     dragOver ? styles.dropZoneActive : "",
     isFilled ? styles.dropZoneFilled : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  ].filter(Boolean).join(" ");
 
   return (
     <div className={classes}>
       {!isFilled ? (
         <>
           <CloudArrowUp48Regular className={styles.dropIcon} />
-          <div className={styles.dropTitle}>Dosyayı veya klasörü buraya bırak</div>
-          <div className={styles.dropHint}>ya da aşağıdaki düğmelerle seç</div>
+          <div className={styles.dropTitle}>{t("step1.title")}</div>
+          <div className={styles.dropHint}>{t("step1.sub")}</div>
           <div className={styles.dropActions}>
-            <Button icon={<Document20Regular />} onClick={onPickFiles}>
-              Dosya
-            </Button>
-            <Button icon={<Folder20Regular />} onClick={onPickFolder}>
-              Klasör
-            </Button>
+            <Button icon={<Document20Regular />} onClick={onPickFiles}>{t("step1.file")}</Button>
+            <Button icon={<Folder20Regular />} onClick={onPickFolder}>{t("step1.folder")}</Button>
           </div>
         </>
       ) : (
@@ -558,30 +442,23 @@ function DropZone({
                   <span className={styles.filePath}>{basename(p)}</span>
                 </Tooltip>
                 <Button
-                  size="small"
-                  appearance="subtle"
+                  size="small" appearance="subtle"
                   icon={<Dismiss20Regular />}
                   onClick={() => onRemoveOne(p)}
-                  aria-label="Kaldır"
+                  aria-label={t("step1.remove")}
                 />
               </div>
             ))}
             {paths.length > 6 && (
               <Caption1 style={{ paddingLeft: 8 }}>
-                +{paths.length - 6} öğe daha
+                {t("step1.more", { count: paths.length - 6 })}
               </Caption1>
             )}
           </div>
           <div className={styles.dropActions}>
-            <Button icon={<Document20Regular />} onClick={onPickFiles}>
-              Ekle (dosya)
-            </Button>
-            <Button icon={<Folder20Regular />} onClick={onPickFolder}>
-              Ekle (klasör)
-            </Button>
-            <Button appearance="subtle" onClick={onClear}>
-              Temizle
-            </Button>
+            <Button icon={<Document20Regular />} onClick={onPickFiles}>{t("step1.addFile")}</Button>
+            <Button icon={<Folder20Regular />} onClick={onPickFolder}>{t("step1.addFolder")}</Button>
+            <Button appearance="subtle" onClick={onClear}>{t("common.clear")}</Button>
           </div>
         </>
       )}
@@ -590,17 +467,13 @@ function DropZone({
 }
 
 // ---------------------------------------------------------------------------
-// Peer tile
+// PeerTile
 // ---------------------------------------------------------------------------
 
 function PeerTile({
-  peer,
-  active,
-  onSelect,
+  peer, active, onSelect,
 }: {
-  peer: Peer;
-  active: boolean;
-  onSelect: () => void;
+  peer: Peer; active: boolean; onSelect: () => void;
 }) {
   const styles = useStyles();
   return (
@@ -609,21 +482,20 @@ function PeerTile({
       onClick={onSelect}
     >
       <div className={styles.peerName}>{peer.deviceName}</div>
-      <div className={styles.peerMeta}>
-        {peer.addresses[0] ?? "?"}:{peer.port}
-      </div>
+      <div className={styles.peerMeta}>{peer.addresses[0] ?? "?"}:{peer.port}</div>
       <div className={styles.peerMeta}>{peer.os}</div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Main view
+// App
 // ---------------------------------------------------------------------------
 
 function App() {
   const styles = useStyles();
   const theme = useSystemTheme();
+  const { t } = useTranslation();
 
   const [session, setSession] = useState<Session | null>(null);
   const [peers, setPeers] = useState<Record<string, Peer>>({});
@@ -643,7 +515,6 @@ function App() {
   const incomingRef = useRef<IncomingPending | null>(null);
   incomingRef.current = incoming;
 
-  // Initial session.
   useEffect(() => {
     (async () => {
       try {
@@ -656,7 +527,6 @@ function App() {
     })();
   }, []);
 
-  // Receiver-ready → refresh session.
   useEffect(() => {
     let stop: Unlisten | undefined;
     onReceiverReady(async () => {
@@ -665,7 +535,6 @@ function App() {
     return () => { stop?.(); };
   }, []);
 
-  // Transfer + peer + incoming subscriptions.
   useEffect(() => {
     const unsubs: Promise<Unlisten>[] = [];
     unsubs.push(onTransferStarted((e: TransferStarted) => {
@@ -695,7 +564,7 @@ function App() {
         const mbps = elapsedMs > 0 ? (e.totalBytes / (elapsedMs / 1000)) / (1024 * 1024) : 0;
         setCompleted((cs) => [
           { id: e.id, direction: e.direction, ok: e.success,
-            msg: e.success ? "Başarılı" : e.error ?? "Hata", mbps, bytes: e.totalBytes },
+            msg: e.success ? t("history.success") : e.error ?? "—", mbps, bytes: e.totalBytes },
           ...cs.slice(0, 19),
         ]);
         const { [e.id]: _g, ...rest } = prev; return rest;
@@ -709,9 +578,8 @@ function App() {
       setIncoming({ request: r, overrideDir: null });
     }));
     return () => { unsubs.forEach((u) => u.then((fn) => fn()).catch(() => {})); };
-  }, []);
+  }, [t]);
 
-  // Tauri drag-drop.
   useEffect(() => {
     const win = getCurrentWebviewWindow();
     const p = win.onDragDropEvent((event) => {
@@ -747,7 +615,7 @@ function App() {
   };
   const handleRenameDevice = async () => {
     if (!session) return;
-    const next = window.prompt("Cihaz adı", session.settings.deviceName);
+    const next = window.prompt(t("topbar.rename"), session.settings.deviceName);
     if (next && next.trim() && next !== session.settings.deviceName) {
       try {
         const updated = await saveSettings(next.trim(), session.settings.saveDir);
@@ -776,12 +644,13 @@ function App() {
     setSendError(null);
     const ip = selectedPeer?.addresses[0] ?? manualIp.trim();
     const port = selectedPeer?.port ?? session?.defaultPort;
-    if (!ip) return setSendError("Bir cihaz seç veya manuel IP yaz.");
-    if (selectedPaths.length === 0) return setSendError("Önce dosya veya klasör seç.");
+    if (!ip) return setSendError(t("send.needDevice"));
+    if (selectedPaths.length === 0) return setSendError(t("send.needPaths"));
     const code = peerCode.replace(/\D/g, "");
-    if (code.length !== 6) return setSendError("6 haneli eşleştirme kodunu gir.");
+    if (code.length !== 6) return setSendError(t("send.needCode"));
     if (ip === "127.0.0.1" || ip === "localhost" || (session?.localIp && ip === session.localIp)) {
-      try { await ensureReceiver(); } catch (e) { return setSendError(`Alıcı başlatılamadı: ${e}`); }
+      try { await ensureReceiver(); }
+      catch (e) { return setSendError(t("send.receiverFailed", { error: String(e) })); }
     }
     setBusySend(true);
     try {
@@ -814,7 +683,7 @@ function App() {
     return (
       <FluentProvider theme={theme} style={{ backgroundColor: "transparent" }}>
         <div className={styles.app} style={{ alignItems: "center", justifyContent: "center" }}>
-          <Spinner label="Hazırlanıyor..." />
+          <Spinner label={t("common.busy")} />
         </div>
       </FluentProvider>
     );
@@ -837,16 +706,14 @@ function App() {
   return (
     <FluentProvider theme={theme} style={{ backgroundColor: "transparent" }}>
       <div className={styles.app}>
-        {/* Top bar */}
         <div className={styles.topbar}>
           <div className={styles.topbarLeft}>
-            <div className={styles.brand}>LANBLAZE</div>
+            <div className={styles.brand}>{t("setup.brand")}</div>
             <div className={styles.device}>
               {session.settings.deviceName}
-              <Tooltip content="Cihaz adını değiştir" relationship="label">
+              <Tooltip content={t("topbar.renameDevice")} relationship="label">
                 <Button
-                  size="small"
-                  appearance="subtle"
+                  size="small" appearance="subtle"
                   icon={<Edit20Regular />}
                   onClick={handleRenameDevice}
                   style={{ marginLeft: 8 }}
@@ -858,29 +725,27 @@ function App() {
               <Caption1>{session.localIp ?? "—"}</Caption1>
               {session.receiverRunning ? (
                 <Badge appearance="tint" color="success">
-                  Dinleniyor · :{session.receiverPort}
+                  {t("topbar.listening")} · :{session.receiverPort}
                 </Badge>
               ) : (
                 <>
-                  <Badge appearance="tint" color="danger">
-                    Dinlemiyor
-                  </Badge>
+                  <Badge appearance="tint" color="danger">{t("topbar.notListening")}</Badge>
                   <Button size="small" appearance="primary" onClick={startReceiverNow}>
-                    Başlat
+                    {t("topbar.startListening")}
                   </Button>
                 </>
               )}
             </div>
           </div>
           <div className={styles.topbarRight}>
+            <LanguagePicker />
             <div className={styles.codeBlock}>
-              <div className={styles.codeLabel}>Eşleştirme kodun</div>
+              <div className={styles.codeLabel}>{t("topbar.pairingCode")}</div>
               <div className={styles.codeValueRow}>
                 <span className={styles.codeValue}>{session.authCode}</span>
-                <Tooltip content="Yeni kod üret" relationship="label">
+                <Tooltip content={t("topbar.newCode")} relationship="label">
                   <Button
-                    size="small"
-                    appearance="subtle"
+                    size="small" appearance="subtle"
                     icon={<ArrowSync20Regular />}
                     onClick={handleRegenerate}
                   />
@@ -890,25 +755,22 @@ function App() {
           </div>
         </div>
 
-        {/* Main */}
         <div className={styles.main}>
-          {/* Save dir line */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, color: tokens.colorNeutralForeground3, fontSize: 13 }}>
             <Folder20Regular />
-            <span>Kayıt klasörü: {session.settings.saveDir}</span>
+            <span>{t("receiveFolder.label")}: {session.settings.saveDir}</span>
             <Button size="small" appearance="subtle" onClick={handleChangeSaveDir}>
-              Değiştir
+              {t("common.change")}
             </Button>
           </div>
 
-          {/* Step 1: drop */}
           <section>
             <div className={styles.sectionHead}>
-              <span className={styles.sectionLabel}>1 · Ne göndereceksin</span>
+              <span className={styles.sectionLabel}>{t("step1.label")}</span>
               <span className={styles.emptyHint}>
                 {selectedPaths.length > 0
-                  ? `${selectedPaths.length} öğe seçildi`
-                  : "Pencereye sürükleyebilirsin"}
+                  ? t("step1.hintCount", { count: selectedPaths.length })
+                  : t("step1.hintEmpty")}
               </span>
             </div>
             <DropZone
@@ -921,31 +783,23 @@ function App() {
             />
           </section>
 
-          {/* Step 2: device */}
           <section>
             <div className={styles.sectionHead}>
-              <span className={styles.sectionLabel}>2 · Hangi cihaza</span>
-              <Button
-                size="small"
-                appearance="subtle"
-                onClick={() => setShowManualIp((v) => !v)}
-              >
-                {showManualIp ? "Liste" : "Manuel IP"}
+              <span className={styles.sectionLabel}>{t("step2.label")}</span>
+              <Button size="small" appearance="subtle" onClick={() => setShowManualIp((v) => !v)}>
+                {showManualIp ? t("step2.toggleList") : t("step2.toggleManual")}
               </Button>
             </div>
             {showManualIp ? (
-              <Field hint="mDNS engelliyse buradan ekle">
+              <Field hint={t("step2.manualHint")}>
                 <Input
                   value={manualIp}
                   onChange={(_, d) => { setManualIp(d.value); setSelectedPeer(null); }}
-                  placeholder="örn. 192.168.1.42"
+                  placeholder={t("step2.manualPlaceholder")}
                 />
               </Field>
             ) : peerList.length === 0 ? (
-              <div className={styles.emptyHint}>
-                Henüz cihaz görünmüyor. Karşı tarafta uygulama açık ve
-                dinlemede olmalı.
-              </div>
+              <div className={styles.emptyHint}>{t("step2.empty")}</div>
             ) : (
               <div className={styles.peerGrid}>
                 {peerList.map((p) => (
@@ -960,11 +814,10 @@ function App() {
             )}
           </section>
 
-          {/* Step 3: code + send */}
           <section>
             <div className={styles.sectionHead}>
-              <span className={styles.sectionLabel}>3 · Karşı tarafın kodunu gir</span>
-              {target && <span className={styles.emptyHint}>Hedef: {target}</span>}
+              <span className={styles.sectionLabel}>{t("step3.label")}</span>
+              {target && <span className={styles.emptyHint}>{t("step3.targetPrefix")}: {target}</span>}
             </div>
             <div className={styles.composeRow}>
               <div className={styles.codeInputWrap}>
@@ -984,24 +837,23 @@ function App() {
                 disabled={!canSend}
                 className={styles.sendButton}
               >
-                {busySend ? "Gönderiliyor..." : "Gönder"}
+                {busySend ? t("step3.sending") : t("step3.send")}
               </Button>
             </div>
             {sendError && (
               <MessageBar intent="error" style={{ marginTop: tokens.spacingVerticalS }}>
                 <MessageBarBody>
-                  <MessageBarTitle>Gönderim hatası</MessageBarTitle>
+                  <MessageBarTitle>{t("step3.errorTitle")}</MessageBarTitle>
                   {sendError}
                 </MessageBarBody>
               </MessageBar>
             )}
           </section>
 
-          {/* Active */}
           {activeList.length > 0 && (
             <section>
               <div className={styles.sectionHead}>
-                <span className={styles.sectionLabel}>Aktif transferler</span>
+                <span className={styles.sectionLabel}>{t("active.label")}</span>
               </div>
               {activeList.map((a) => {
                 const ratio = a.totalBytes > 0 ? a.totalBytesDone / a.totalBytes : 0;
@@ -1011,10 +863,10 @@ function App() {
                   <div key={a.id} className={styles.transferRow}>
                     <div className={styles.transferHeader}>
                       <Body1Strong>
-                        {a.direction === "send" ? "↑ Gönderim" : "↓ Alım"} — {a.peer}
+                        {a.direction === "send" ? t("active.send") : t("active.recv")} — {a.peer}
                       </Body1Strong>
                       <span className={styles.peerMeta}>
-                        {mbps.toFixed(1)} MB/s · {a.filesDone}/{a.filesTotal} dosya
+                        {mbps.toFixed(1)} MB/s · {a.filesDone}/{a.filesTotal} {t("active.files")}
                       </span>
                     </div>
                     <ProgressBar value={ratio} thickness="medium" />
@@ -1028,18 +880,16 @@ function App() {
             </section>
           )}
 
-          {/* History */}
           {completed.length > 0 && (
             <section>
               <div className={styles.sectionHead}>
-                <span className={styles.sectionLabel}>Son aktarımlar</span>
+                <span className={styles.sectionLabel}>{t("history.label")}</span>
               </div>
               <Divider style={{ marginBottom: 8 }} />
               {completed.map((c) => (
                 <div key={c.id} className={styles.historyRow}>
                   <span>
-                    {c.direction === "send" ? "↑" : "↓"} {formatBytes(c.bytes)} ·{" "}
-                    {c.mbps.toFixed(1)} MB/s
+                    {c.direction === "send" ? "↑" : "↓"} {formatBytes(c.bytes)} · {c.mbps.toFixed(1)} MB/s
                   </span>
                   <span style={{
                     color: c.ok
@@ -1054,42 +904,40 @@ function App() {
           )}
         </div>
 
-        {/* Incoming */}
         <Dialog open={incoming !== null} modalType="alert">
           <DialogSurface>
             <DialogBody>
-              <DialogTitle>Gelen dosya isteği</DialogTitle>
+              <DialogTitle>{t("incoming.title")}</DialogTitle>
               <DialogContent>
                 {incoming && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    <Body1>
+                    <div>
                       <Subtitle1>{incoming.request.deviceName}</Subtitle1>
-                      <br />
-                      <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                      <Caption1 style={{ color: tokens.colorNeutralForeground3, display: "block" }}>
                         {incoming.request.peer} · {incoming.request.os}
                       </Caption1>
-                    </Body1>
+                    </div>
                     <Body1>
-                      <b>{incoming.request.fileCount}</b> dosya ·{" "}
-                      <b>{formatBytes(incoming.request.totalBytes)}</b> göndermek
-                      istiyor.
+                      {t("incoming.summary", {
+                        count: incoming.request.fileCount,
+                        size: formatBytes(incoming.request.totalBytes),
+                      })}
                     </Body1>
                     <Divider />
                     <div>
                       <div className={styles.codeLabel} style={{ marginBottom: 4 }}>
-                        Kayıt klasörü
+                        {t("incoming.folder")}
                       </div>
                       <div style={{ fontSize: 13, color: tokens.colorNeutralForeground2 }}>
                         {incoming.overrideDir ?? session.settings.saveDir}
                       </div>
                       <Button
-                        size="small"
-                        appearance="subtle"
+                        size="small" appearance="subtle"
                         icon={<Folder20Regular />}
                         onClick={pickIncomingDir}
                         style={{ marginTop: 4 }}
                       >
-                        Başka klasöre kaydet
+                        {t("incoming.overrideButton")}
                       </Button>
                     </div>
                   </div>
@@ -1098,12 +946,12 @@ function App() {
               <DialogActions>
                 <DialogTrigger disableButtonEnhancement>
                   <Button appearance="secondary" onClick={() => respondAndClose(false)}>
-                    Reddet
+                    {t("incoming.reject")}
                   </Button>
                 </DialogTrigger>
                 <DialogTrigger disableButtonEnhancement>
                   <Button appearance="primary" onClick={() => respondAndClose(true)}>
-                    Kabul et
+                    {t("incoming.accept")}
                   </Button>
                 </DialogTrigger>
               </DialogActions>
