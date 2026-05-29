@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   common: { select: "Seç", change: "Değiştir", clear: "Temizle", busy: "Yükleniyor…" },
   setup: {
     brand: "LANBLAZE",
@@ -11,6 +11,7 @@ export default {
     preparing: "Hazırlanıyor…",
   },
   topbar: {
+    openSettings: "Ayarlar",
     listening: "Dinleniyor",
     notListening: "Dinlemiyor",
     startListening: "Başlat",
@@ -59,6 +60,7 @@ export default {
   active: { label: "Aktif transferler", send: "↑ Gönderim", recv: "↓ Alım", files: "dosya" },
   history: { label: "Son aktarımlar", success: "Başarılı" },
   incoming: {
+    trustCheck: "Bu cihaza her zaman güven",
     title: "Gelen dosya isteği",
     summary_one: "sana {{count}} dosya ({{size}}) göndermek istiyor.",
     summary_other: "sana {{count}} dosya ({{size}}) göndermek istiyor.",
@@ -66,6 +68,7 @@ export default {
     overrideButton: "Başka klasöre kaydet",
     accept: "Kabul et",
     reject: "Reddet",
-  },
+  },  settings: {"title":"Ayarlar","appearance":"Görünüm","theme":"Tema","themeSystem":"Sistem","themeLight":"Açık","themeDark":"Koyu","notifications":"Bildirim ve ses","soundEnabled":"Gelen aktarımda ses çal","notificationsEnabled":"Sistem bildirimleri göster","behaviour":"Davranış","autoStart":"Oturum açılınca LanBlaze\u0027i başlat","closeToTray":"Pencere kapatılınca tepside çalışmaya devam et","trustedDevices":"Güvenilen cihazlar","trustedEmpty":"Henüz güvenilen cihaz yok. Bir aktarım kabul ederken \u0027Bu cihaza her zaman güven\u0027 işaretle.","untrust":"Kaldır","recent":"Son etkinlik","recentEmpty":"Henüz bir şey yok.","clear":"Temizle","close":"Kapat"},
+
   lang: { label: "Dil" },
 };

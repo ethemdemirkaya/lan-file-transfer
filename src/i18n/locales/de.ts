@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   common: { select: "Wählen", change: "Ändern", clear: "Leeren", busy: "Wird geladen…" },
   setup: {
     brand: "LANBLAZE",
@@ -11,6 +11,7 @@ export default {
     preparing: "Wird vorbereitet…",
   },
   topbar: {
+    openSettings: "Einstellungen",
     listening: "Empfangsbereit",
     notListening: "Inaktiv",
     startListening: "Starten",
@@ -59,6 +60,7 @@ export default {
   active: { label: "Aktive Übertragungen", send: "↑ Senden", recv: "↓ Empfangen", files: "Dateien" },
   history: { label: "Letzte Übertragungen", success: "Fertig" },
   incoming: {
+    trustCheck: "Diesem Gerät immer vertrauen",
     title: "Eingehende Übertragung",
     summary_one: "möchte dir {{count}} Datei ({{size}}) senden.",
     summary_other: "möchte dir {{count}} Dateien ({{size}}) senden.",
@@ -66,6 +68,7 @@ export default {
     overrideButton: "Anderen Ordner wählen",
     accept: "Annehmen",
     reject: "Ablehnen",
-  },
+  },  settings: {"title":"Einstellungen","appearance":"Darstellung","theme":"Design","themeSystem":"System","themeLight":"Hell","themeDark":"Dunkel","notifications":"Benachrichtigungen und Ton","soundEnabled":"Ton bei eingehenden Übertragungen abspielen","notificationsEnabled":"Systembenachrichtigungen anzeigen","behaviour":"Verhalten","autoStart":"LanBlaze bei Anmeldung starten","closeToTray":"Beim Schließen im Infobereich weiterlaufen","trustedDevices":"Vertraute Geräte","trustedEmpty":"Noch keine vertrauten Geräte. Markiere \u0027Immer vertrauen\u0027 beim Annehmen.","untrust":"Entfernen","recent":"Letzte Aktivität","recentEmpty":"Noch nichts.","clear":"Leeren","close":"Schließen"},
+
   lang: { label: "Sprache" },
 };

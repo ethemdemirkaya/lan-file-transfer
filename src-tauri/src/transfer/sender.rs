@@ -11,13 +11,16 @@ use crate::events::{
     EVT_TRANSFER_PROGRESS, EVT_TRANSFER_STARTED,
 };
 use crate::hash::StreamHasher;
+use crate::history::{self, HistoryRecord};
 use crate::protocol::{
     current_os, Hello, HelloAck, CHUNK_SIZE, PROTOCOL_VERSION, RESUME_THRESHOLD,
 };
+use crate::state::AppState;
 use crate::transfer::stream::{
     read_json, read_resume_offset, write_end_marker, write_file_header, write_json,
 };
 use crate::transfer::{TransferError, TransferResult};
+use tauri::Manager;
 
 pub struct SendItem {
     pub local_path: PathBuf,
@@ -40,7 +43,57 @@ pub async fn run_send(app: AppHandle, req: SendRequest) -> TransferResult<()> {
     let total_bytes: u64 = req.items.iter().map(|i| i.size).sum();
     let file_count = req.items.len() as u64;
     let id = req.id.clone();
+    let peer_label = req.peer_addr.clone();
 
+    let result = do_send(&app, req, started_at, total_bytes, file_count, id.clone()).await;
+    let elapsed_ms = started_at.elapsed().as_millis() as u64;
+    let (success, error, bytes_sent) = match &result {
+        Ok(bytes) => (true, None, *bytes),
+        Err(e) => (false, Some(format!("{e}")), 0u64),
+    };
+
+    {
+        let state: tauri::State<'_, AppState> = app.state();
+        let cfg_dir = state.session.lock().unwrap().settings_dir.clone();
+        let record = HistoryRecord {
+            id: id.clone(),
+            direction: "send".into(),
+            peer: peer_label,
+            bytes: if success { total_bytes } else { bytes_sent },
+            file_count,
+            elapsed_ms,
+            success,
+            error: error.clone(),
+            finished_at: history::now_ms(),
+        };
+        if let Err(e) = history::push(&cfg_dir, record) {
+            tracing::warn!("history append failed: {e}");
+        }
+    }
+
+    let _ = app.emit(
+        EVT_TRANSFER_COMPLETED,
+        TransferCompleted {
+            id,
+            direction: "send",
+            success,
+            error,
+            elapsed_ms,
+            total_bytes: if success { total_bytes } else { bytes_sent },
+        },
+    );
+
+    result.map(|_| ())
+}
+
+async fn do_send(
+    app: &AppHandle,
+    req: SendRequest,
+    _started_at: Instant,
+    total_bytes: u64,
+    file_count: u64,
+    id: String,
+) -> TransferResult<u64> {
     let stream = TcpStream::connect(&req.peer_addr).await?;
     stream.set_nodelay(true)?;
     let (read_half, write_half) = stream.into_split();
@@ -61,17 +114,6 @@ pub async fn run_send(app: AppHandle, req: SendRequest) -> TransferResult<()> {
     let ack: HelloAck = read_json(&mut reader).await?;
     if !ack.accept {
         let reason = ack.reason.unwrap_or_else(|| "rejected".into());
-        let _ = app.emit(
-            EVT_TRANSFER_COMPLETED,
-            TransferCompleted {
-                id: id.clone(),
-                direction: "send",
-                success: false,
-                error: Some(format!("Karşı taraf reddetti: {reason}")),
-                elapsed_ms: started_at.elapsed().as_millis() as u64,
-                total_bytes: 0,
-            },
-        );
         return Err(TransferError::Rejected(reason));
     }
 
@@ -169,18 +211,8 @@ pub async fn run_send(app: AppHandle, req: SendRequest) -> TransferResult<()> {
     writer.flush().await?;
     writer.shutdown().await.ok();
 
-    let _ = app.emit(
-        EVT_TRANSFER_COMPLETED,
-        TransferCompleted {
-            id,
-            direction: "send",
-            success: true,
-            error: None,
-            elapsed_ms: started_at.elapsed().as_millis() as u64,
-            total_bytes,
-        },
-    );
-    Ok(())
+    let _ = id; // outer run_send emits the completion + history record
+    Ok(total_done)
 }
 
 /// Build a SendRequest from a set of absolute local paths (files or

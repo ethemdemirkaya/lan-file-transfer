@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   common: { select: "選択", change: "変更", clear: "クリア", busy: "読み込み中…" },
   setup: {
     brand: "LANBLAZE",
@@ -11,6 +11,7 @@ export default {
     preparing: "準備中…",
   },
   topbar: {
+    openSettings: "設定",
     listening: "待受中",
     notListening: "停止中",
     startListening: "開始",
@@ -59,6 +60,7 @@ export default {
   active: { label: "進行中の転送", send: "↑ 送信", recv: "↓ 受信", files: "ファイル" },
   history: { label: "最近の転送", success: "完了" },
   incoming: {
+    trustCheck: "この端末を常に信頼する",
     title: "受信リクエスト",
     summary_one: "から {{count}} ファイル（{{size}}）の送信があります。",
     summary_other: "から {{count}} ファイル（{{size}}）の送信があります。",
@@ -66,6 +68,7 @@ export default {
     overrideButton: "別のフォルダーに保存",
     accept: "承認",
     reject: "拒否",
-  },
+  },  settings: {"title":"設定","appearance":"外観","theme":"テーマ","themeSystem":"システム","themeLight":"ライト","themeDark":"ダーク","notifications":"通知と音","soundEnabled":"受信時に音を鳴らす","notificationsEnabled":"システム通知を表示","behaviour":"動作","autoStart":"サインイン時にLanBlazeを起動","closeToTray":"ウィンドウを閉じてもトレイで継続","trustedDevices":"信頼済み端末","trustedEmpty":"まだありません。受信時に「常に信頼する」をチェックしてください。","untrust":"削除","recent":"最近の履歴","recentEmpty":"まだありません。","clear":"クリア","close":"閉じる"},
+
   lang: { label: "言語" },
 };

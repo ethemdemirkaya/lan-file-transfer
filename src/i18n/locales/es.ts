@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   common: { select: "Elegir", change: "Cambiar", clear: "Limpiar", busy: "Cargando…" },
   setup: {
     brand: "LANBLAZE",
@@ -11,6 +11,7 @@ export default {
     preparing: "Preparando…",
   },
   topbar: {
+    openSettings: "Ajustes",
     listening: "Escuchando",
     notListening: "Detenido",
     startListening: "Iniciar",
@@ -59,6 +60,7 @@ export default {
   active: { label: "Transferencias activas", send: "↑ Enviando", recv: "↓ Recibiendo", files: "archivos" },
   history: { label: "Transferencias recientes", success: "Hecho" },
   incoming: {
+    trustCheck: "Confiar siempre en este dispositivo",
     title: "Transferencia entrante",
     summary_one: "quiere enviarte {{count}} archivo ({{size}}).",
     summary_other: "quiere enviarte {{count}} archivos ({{size}}).",
@@ -66,6 +68,7 @@ export default {
     overrideButton: "Guardar en otra carpeta",
     accept: "Aceptar",
     reject: "Rechazar",
-  },
+  },  settings: {"title":"Ajustes","appearance":"Apariencia","theme":"Tema","themeSystem":"Sistema","themeLight":"Claro","themeDark":"Oscuro","notifications":"Notificaciones y sonido","soundEnabled":"Reproducir un sonido en transferencias entrantes","notificationsEnabled":"Mostrar notificaciones del sistema","behaviour":"Comportamiento","autoStart":"Iniciar LanBlaze al iniciar sesión","closeToTray":"Seguir en la bandeja al cerrar la ventana","trustedDevices":"Dispositivos de confianza","trustedEmpty":"Aún sin dispositivos de confianza. Marca \u0027Confiar siempre\u0027 al aceptar una transferencia.","untrust":"Quitar","recent":"Actividad reciente","recentEmpty":"Nada todavía.","clear":"Limpiar","close":"Cerrar"},
+
   lang: { label: "Idioma" },
 };

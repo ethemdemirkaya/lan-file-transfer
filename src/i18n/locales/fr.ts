@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   common: { select: "Choisir", change: "Modifier", clear: "Effacer", busy: "Chargement…" },
   setup: {
     brand: "LANBLAZE",
@@ -11,6 +11,7 @@ export default {
     preparing: "Préparation…",
   },
   topbar: {
+    openSettings: "Paramètres",
     listening: "À l'écoute",
     notListening: "Inactif",
     startListening: "Démarrer",
@@ -59,6 +60,7 @@ export default {
   active: { label: "Transferts en cours", send: "↑ Envoi", recv: "↓ Réception", files: "fichiers" },
   history: { label: "Transferts récents", success: "Terminé" },
   incoming: {
+    trustCheck: "Toujours faire confiance à cet appareil",
     title: "Transfert entrant",
     summary_one: "veut t'envoyer {{count}} fichier ({{size}}).",
     summary_other: "veut t'envoyer {{count}} fichiers ({{size}}).",
@@ -66,6 +68,7 @@ export default {
     overrideButton: "Enregistrer ailleurs",
     accept: "Accepter",
     reject: "Refuser",
-  },
+  },  settings: {"title":"Paramètres","appearance":"Apparence","theme":"Thème","themeSystem":"Système","themeLight":"Clair","themeDark":"Sombre","notifications":"Notifications et son","soundEnabled":"Émettre un son pour les transferts entrants","notificationsEnabled":"Afficher les notifications système","behaviour":"Comportement","autoStart":"Démarrer LanBlaze à l\u0027ouverture de session","closeToTray":"Continuer dans la zone de notification à la fermeture","trustedDevices":"Appareils de confiance","trustedEmpty":"Aucun appareil de confiance. Coche \u0027Toujours faire confiance\u0027 lors d\u0027un transfert.","untrust":"Supprimer","recent":"Activité récente","recentEmpty":"Rien pour le moment.","clear":"Effacer","close":"Fermer"},
+
   lang: { label: "Langue" },
 };

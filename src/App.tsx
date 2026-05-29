@@ -33,6 +33,14 @@ import {
   MenuPopover,
   MenuList,
   MenuItem,
+  Drawer,
+  DrawerHeader,
+  DrawerHeaderTitle,
+  DrawerBody,
+  Switch,
+  Checkbox,
+  RadioGroup,
+  Radio,
   makeStyles,
   shorthands,
   tokens,
@@ -47,12 +55,22 @@ import {
   Edit20Regular,
   Wifi120Regular,
   LocalLanguage20Regular,
+  Settings20Regular,
+  Delete20Regular,
 } from "@fluentui/react-icons";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
+import {
+  clearHistory,
   ensureReceiver,
+  getHistory,
   getSession,
+  HistoryRecord,
   IncomingRequest,
   onIncomingRequest,
   onPeerAdded,
@@ -67,10 +85,19 @@ import {
   saveSettings,
   sendPaths,
   Session,
+  setAutoStart,
+  setCloseToTray,
+  setNotificationsEnabled,
+  setSoundEnabled,
+  setTheme,
+  ThemePref,
   TransferCompleted,
   TransferProgress,
   TransferStarted,
+  trustDevice,
+  untrustDevice,
   Unlisten,
+  UserSettings,
 } from "./lib/tauri";
 import { SUPPORTED_LANGS, setLang } from "./i18n";
 
@@ -79,65 +106,32 @@ import { SUPPORTED_LANGS, setLang } from "./i18n";
 // ---------------------------------------------------------------------------
 
 const useStyles = makeStyles({
-  app: {
-    minHeight: "100vh",
-    backgroundColor: "transparent",
-    color: tokens.colorNeutralForeground1,
-    display: "flex",
-    flexDirection: "column",
-  },
+  app: { minHeight: "100vh", backgroundColor: "transparent", color: tokens.colorNeutralForeground1, display: "flex", flexDirection: "column" },
   topbar: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
+    display: "flex", alignItems: "center", justifyContent: "space-between",
     ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalXXXL),
-    borderBottomWidth: "1px",
-    borderBottomStyle: "solid",
-    borderBottomColor: tokens.colorNeutralStroke3,
+    borderBottomWidth: "1px", borderBottomStyle: "solid", borderBottomColor: tokens.colorNeutralStroke3,
   },
   topbarLeft: { display: "flex", flexDirection: "column", gap: "2px" },
   topbarRight: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalL },
-  brand: {
-    fontWeight: 600, fontSize: "14px",
-    color: tokens.colorNeutralForeground2, letterSpacing: "0.04em",
-  },
+  brand: { fontWeight: 600, fontSize: "14px", color: tokens.colorNeutralForeground2, letterSpacing: "0.04em" },
   device: { fontSize: "20px", fontWeight: 600 },
-  statusRow: {
-    display: "flex", alignItems: "center", gap: "6px",
-    fontVariantNumeric: "tabular-nums",
-  },
+  statusRow: { display: "flex", alignItems: "center", gap: "6px", fontVariantNumeric: "tabular-nums" },
   codeBlock: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" },
-  codeLabel: {
-    color: tokens.colorNeutralForeground3, fontSize: "11px",
-    letterSpacing: "0.06em", textTransform: "uppercase",
-  },
+  codeLabel: { color: tokens.colorNeutralForeground3, fontSize: "11px", letterSpacing: "0.06em", textTransform: "uppercase" },
   codeValueRow: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS },
-  codeValue: {
-    fontSize: "28px", fontWeight: 600, letterSpacing: "0.22em",
-    fontVariantNumeric: "tabular-nums", color: tokens.colorNeutralForeground1,
-  },
+  codeValue: { fontSize: "28px", fontWeight: 600, letterSpacing: "0.22em", fontVariantNumeric: "tabular-nums", color: tokens.colorNeutralForeground1 },
   main: {
-    flex: 1, display: "flex", flexDirection: "column",
-    gap: tokens.spacingVerticalXL,
+    flex: 1, display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXL,
     ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalXXXL),
-    maxWidth: "920px", width: "100%",
-    marginLeft: "auto", marginRight: "auto", boxSizing: "border-box",
+    maxWidth: "920px", width: "100%", marginLeft: "auto", marginRight: "auto", boxSizing: "border-box",
   },
-  sectionHead: {
-    display: "flex", alignItems: "center", justifyContent: "space-between",
-    marginBottom: tokens.spacingVerticalXS,
-  },
-  sectionLabel: {
-    color: tokens.colorNeutralForeground2, fontSize: "12px",
-    fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
-  },
+  sectionHead: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalXS },
+  sectionLabel: { color: tokens.colorNeutralForeground2, fontSize: "12px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" },
   dropZone: {
-    borderRadius: tokens.borderRadiusXLarge,
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderTopWidth: "1px", borderRightWidth: "1px",
-    borderBottomWidth: "1px", borderLeftWidth: "1px",
-    borderTopStyle: "dashed", borderRightStyle: "dashed",
-    borderBottomStyle: "dashed", borderLeftStyle: "dashed",
+    borderRadius: tokens.borderRadiusXLarge, backgroundColor: tokens.colorNeutralBackground2,
+    borderTopWidth: "1px", borderRightWidth: "1px", borderBottomWidth: "1px", borderLeftWidth: "1px",
+    borderTopStyle: "dashed", borderRightStyle: "dashed", borderBottomStyle: "dashed", borderLeftStyle: "dashed",
     borderTopColor: tokens.colorNeutralStroke2, borderRightColor: tokens.colorNeutralStroke2,
     borderBottomColor: tokens.colorNeutralStroke2, borderLeftColor: tokens.colorNeutralStroke2,
     ...shorthands.padding("44px", tokens.spacingHorizontalXXL),
@@ -153,8 +147,7 @@ const useStyles = makeStyles({
     borderBottomColor: tokens.colorBrandStroke2, borderLeftColor: tokens.colorBrandStroke2,
   },
   dropZoneFilled: {
-    borderTopStyle: "solid", borderRightStyle: "solid",
-    borderBottomStyle: "solid", borderLeftStyle: "solid",
+    borderTopStyle: "solid", borderRightStyle: "solid", borderBottomStyle: "solid", borderLeftStyle: "solid",
     backgroundColor: tokens.colorNeutralBackground1,
   },
   dropIcon: { color: tokens.colorNeutralForeground3, fontSize: "44px" },
@@ -162,31 +155,17 @@ const useStyles = makeStyles({
   dropHint: { color: tokens.colorNeutralForeground3 },
   dropActions: { marginTop: tokens.spacingVerticalS, display: "flex", gap: tokens.spacingHorizontalS },
   fileList: { display: "flex", flexDirection: "column", gap: "2px", width: "100%", maxWidth: "560px" },
-  fileRow: {
-    display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS,
-    ...shorthands.padding("6px", tokens.spacingHorizontalS),
-    borderRadius: tokens.borderRadiusMedium,
-  },
-  filePath: {
-    flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-    fontSize: "13px", color: tokens.colorNeutralForeground2,
-  },
-  peerGrid: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-    gap: tokens.spacingHorizontalM,
-  },
+  fileRow: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS, ...shorthands.padding("6px", tokens.spacingHorizontalS), borderRadius: tokens.borderRadiusMedium },
+  filePath: { flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "13px", color: tokens.colorNeutralForeground2 },
+  peerGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: tokens.spacingHorizontalM },
   peerTile: {
     ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM),
-    borderRadius: tokens.borderRadiusLarge,
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderTopWidth: "1px", borderRightWidth: "1px",
-    borderBottomWidth: "1px", borderLeftWidth: "1px",
-    borderTopStyle: "solid", borderRightStyle: "solid",
-    borderBottomStyle: "solid", borderLeftStyle: "solid",
+    borderRadius: tokens.borderRadiusLarge, backgroundColor: tokens.colorNeutralBackground2,
+    borderTopWidth: "1px", borderRightWidth: "1px", borderBottomWidth: "1px", borderLeftWidth: "1px",
+    borderTopStyle: "solid", borderRightStyle: "solid", borderBottomStyle: "solid", borderLeftStyle: "solid",
     borderTopColor: tokens.colorTransparentStroke, borderRightColor: tokens.colorTransparentStroke,
     borderBottomColor: tokens.colorTransparentStroke, borderLeftColor: tokens.colorTransparentStroke,
-    cursor: "pointer",
-    transitionDuration: "120ms", transitionTimingFunction: "ease-out",
+    cursor: "pointer", transitionDuration: "120ms", transitionTimingFunction: "ease-out",
     transitionProperty: "background-color, border-color",
     display: "flex", flexDirection: "column", gap: "4px",
   },
@@ -198,46 +177,44 @@ const useStyles = makeStyles({
   peerName: { fontWeight: 600, fontSize: "14px" },
   peerMeta: { color: tokens.colorNeutralForeground3, fontSize: "12px", fontVariantNumeric: "tabular-nums" },
   emptyHint: { color: tokens.colorNeutralForeground3, fontSize: "13px" },
-  composeRow: {
-    display: "grid", gridTemplateColumns: "1fr auto",
-    gap: tokens.spacingHorizontalM, alignItems: "end",
-  },
+  composeRow: { display: "grid", gridTemplateColumns: "1fr auto", gap: tokens.spacingHorizontalM, alignItems: "end" },
   codeInputWrap: { display: "flex", flexDirection: "column", gap: "4px" },
   sendButton: { alignSelf: "stretch" },
   transferRow: { display: "flex", flexDirection: "column", gap: "4px", ...shorthands.padding(tokens.spacingVerticalS, "0") },
   transferHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px" },
-  historyRow: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    fontSize: "12px", color: tokens.colorNeutralForeground3,
-    ...shorthands.padding("2px", "0"),
-  },
+  historyRow: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", color: tokens.colorNeutralForeground3, ...shorthands.padding("2px", "0") },
   setupRoot: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", ...shorthands.padding(tokens.spacingVerticalXXL) },
-  setupCard: {
-    width: "100%", maxWidth: "440px", display: "flex", flexDirection: "column",
-    gap: tokens.spacingVerticalL,
-    ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalXXXL),
-    backgroundColor: tokens.colorNeutralBackground1,
-    borderRadius: tokens.borderRadiusXLarge,
-  },
+  setupCard: { width: "100%", maxWidth: "440px", display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL, ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalXXXL), backgroundColor: tokens.colorNeutralBackground1, borderRadius: tokens.borderRadiusXLarge },
   manualIp: { display: "flex", gap: tokens.spacingHorizontalS, alignItems: "center" },
+  settingsSection: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM, marginTop: tokens.spacingVerticalL },
+  settingsRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: tokens.spacingHorizontalM },
+  trustedItem: {
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
+    borderRadius: tokens.borderRadiusMedium, backgroundColor: tokens.colorNeutralBackground2,
+  },
 });
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function useSystemTheme(): Theme {
-  const get = () =>
-    window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? webDarkTheme
-      : webLightTheme;
-  const [theme, setTheme] = useState<Theme>(get);
+function useEffectiveTheme(pref: ThemePref | undefined): Theme {
+  const compute = (): Theme => {
+    const sysIsDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const want = pref === "system" || pref === undefined ? (sysIsDark ? "dark" : "light") : pref;
+    return want === "dark" ? webDarkTheme : webLightTheme;
+  };
+  const [theme, setTheme] = useState<Theme>(compute);
   useEffect(() => {
+    setTheme(compute());
+    if (pref !== "system" && pref !== undefined) return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => setTheme(get());
+    const handler = () => setTheme(compute());
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pref]);
   return theme;
 }
 
@@ -251,6 +228,68 @@ function formatBytes(n: number): string {
 function basename(p: string): string {
   const parts = p.split(/[\\/]/);
   return parts[parts.length - 1] || p;
+}
+
+function playChime(kind: "incoming" | "done"): void {
+  try {
+    const Ctor = (window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext) as typeof AudioContext;
+    const ctx = new Ctor();
+    const now = ctx.currentTime;
+    const tones = kind === "incoming" ? [660, 880] : [880, 1320];
+    const dur = 0.14;
+    tones.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now + i * dur);
+      gain.gain.exponentialRampToValueAtTime(0.08, now + i * dur + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + i * dur + dur);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now + i * dur);
+      osc.stop(now + i * dur + dur + 0.02);
+    });
+    setTimeout(() => ctx.close().catch(() => {}), 600);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function notify(title: string, body: string): Promise<void> {
+  try {
+    let granted = await isPermissionGranted();
+    if (!granted) {
+      const res = await requestPermission();
+      granted = res === "granted";
+    }
+    if (granted) sendNotification({ title, body });
+  } catch {
+    /* ignore */
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface ActiveTransfer {
+  id: string;
+  direction: "send" | "recv";
+  peer: string;
+  filesTotal: number;
+  filesDone: number;
+  totalBytes: number;
+  totalBytesDone: number;
+  currentFile: string;
+  startedAt: number;
+}
+
+interface IncomingPending {
+  request: IncomingRequest;
+  overrideDir: string | null;
+  trust: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -270,9 +309,7 @@ function LanguagePicker() {
       <MenuPopover>
         <MenuList>
           {SUPPORTED_LANGS.map((l) => (
-            <MenuItem key={l.code} onClick={() => setLang(l.code)}>
-              {l.name}
-            </MenuItem>
+            <MenuItem key={l.code} onClick={() => setLang(l.code)}>{l.name}</MenuItem>
           ))}
         </MenuList>
       </MenuPopover>
@@ -281,48 +318,12 @@ function LanguagePicker() {
 }
 
 // ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface ActiveTransfer {
-  id: string;
-  direction: "send" | "recv";
-  peer: string;
-  filesTotal: number;
-  filesDone: number;
-  totalBytes: number;
-  totalBytesDone: number;
-  currentFile: string;
-  startedAt: number;
-}
-
-interface CompletedRow {
-  id: string;
-  direction: "send" | "recv";
-  ok: boolean;
-  msg: string;
-  mbps: number;
-  bytes: number;
-}
-
-interface IncomingPending {
-  request: IncomingRequest;
-  overrideDir: string | null;
-}
-
-// ---------------------------------------------------------------------------
 // Setup wizard
 // ---------------------------------------------------------------------------
 
-function SetupWizard({
-  initial,
-  onDone,
-}: {
-  initial: Session;
-  onDone: (s: Session) => void;
-}) {
+function SetupWizard({ initial, onDone }: { initial: Session; onDone: (s: Session) => void }) {
   const styles = useStyles();
-  const theme = useSystemTheme();
+  const theme = useEffectiveTheme(initial.settings.theme);
   const { t } = useTranslation();
   const [name, setName] = useState(initial.settings.deviceName);
   const [dir, setDir] = useState(initial.settings.saveDir);
@@ -360,16 +361,11 @@ function SetupWizard({
               <div className={styles.brand}>{t("setup.brand")}</div>
               <Title2>{t("setup.title")}</Title2>
             </div>
-            <Body1 style={{ color: tokens.colorNeutralForeground3 }}>
-              {t("setup.desc")}
-            </Body1>
+            <Body1 style={{ color: tokens.colorNeutralForeground3 }}>{t("setup.desc")}</Body1>
             <Field label={t("setup.deviceName")}>
               <Input value={name} onChange={(_, d) => setName(d.value)} />
             </Field>
-            <Field
-              label={t("setup.saveDir")}
-              hint={t("setup.saveDirHint")}
-            >
+            <Field label={t("setup.saveDir")} hint={t("setup.saveDirHint")}>
               <div className={styles.manualIp}>
                 <Input value={dir} onChange={(_, d) => setDir(d.value)} style={{ flex: 1 }} readOnly />
                 <Button icon={<Folder20Regular />} onClick={pickDir}>{t("common.select")}</Button>
@@ -397,28 +393,15 @@ function SetupWizard({
 // ---------------------------------------------------------------------------
 
 function DropZone({
-  paths,
-  dragOver,
-  onPickFiles,
-  onPickFolder,
-  onClear,
-  onRemoveOne,
+  paths, dragOver, onPickFiles, onPickFolder, onClear, onRemoveOne,
 }: {
-  paths: string[];
-  dragOver: boolean;
-  onPickFiles: () => void;
-  onPickFolder: () => void;
-  onClear: () => void;
-  onRemoveOne: (p: string) => void;
+  paths: string[]; dragOver: boolean;
+  onPickFiles: () => void; onPickFolder: () => void; onClear: () => void; onRemoveOne: (p: string) => void;
 }) {
   const styles = useStyles();
   const { t } = useTranslation();
   const isFilled = paths.length > 0;
-  const classes = [
-    styles.dropZone,
-    dragOver ? styles.dropZoneActive : "",
-    isFilled ? styles.dropZoneFilled : "",
-  ].filter(Boolean).join(" ");
+  const classes = [styles.dropZone, dragOver ? styles.dropZoneActive : "", isFilled ? styles.dropZoneFilled : ""].filter(Boolean).join(" ");
 
   return (
     <div className={classes}>
@@ -441,18 +424,11 @@ function DropZone({
                 <Tooltip content={p} relationship="label">
                   <span className={styles.filePath}>{basename(p)}</span>
                 </Tooltip>
-                <Button
-                  size="small" appearance="subtle"
-                  icon={<Dismiss20Regular />}
-                  onClick={() => onRemoveOne(p)}
-                  aria-label={t("step1.remove")}
-                />
+                <Button size="small" appearance="subtle" icon={<Dismiss20Regular />} onClick={() => onRemoveOne(p)} aria-label={t("step1.remove")} />
               </div>
             ))}
             {paths.length > 6 && (
-              <Caption1 style={{ paddingLeft: 8 }}>
-                {t("step1.more", { count: paths.length - 6 })}
-              </Caption1>
+              <Caption1 style={{ paddingLeft: 8 }}>{t("step1.more", { count: paths.length - 6 })}</Caption1>
             )}
           </div>
           <div className={styles.dropActions}>
@@ -470,16 +446,17 @@ function DropZone({
 // PeerTile
 // ---------------------------------------------------------------------------
 
-function PeerTile({
-  peer, active, onSelect,
-}: {
-  peer: Peer; active: boolean; onSelect: () => void;
-}) {
+function PeerTile({ peer, active, onSelect }: { peer: Peer; active: boolean; onSelect: () => void }) {
   const styles = useStyles();
   return (
     <div
+      role="button"
+      tabIndex={0}
       className={[styles.peerTile, active ? styles.peerTileActive : ""].join(" ")}
       onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
+      aria-pressed={active}
+      aria-label={`${peer.deviceName} ${peer.addresses[0] ?? ""}:${peer.port}`}
     >
       <div className={styles.peerName}>{peer.deviceName}</div>
       <div className={styles.peerMeta}>{peer.addresses[0] ?? "?"}:{peer.port}</div>
@@ -489,19 +466,176 @@ function PeerTile({
 }
 
 // ---------------------------------------------------------------------------
+// Settings drawer
+// ---------------------------------------------------------------------------
+
+function SettingsDrawer({
+  open: isOpen, onOpenChange, session, onSettingsUpdated,
+}: {
+  open: boolean; onOpenChange: (v: boolean) => void;
+  session: Session; onSettingsUpdated: (s: UserSettings) => void;
+}) {
+  const styles = useStyles();
+  const { t } = useTranslation();
+  const [history, setHistory] = useState<HistoryRecord[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      getHistory().then((h) => setHistory(h.records)).catch(() => {});
+    }
+  }, [isOpen]);
+
+  const onTheme = async (theme: ThemePref) => {
+    try { onSettingsUpdated(await setTheme(theme)); } catch (e) { console.error(e); }
+  };
+  const onSound = async (v: boolean) => {
+    try { onSettingsUpdated(await setSoundEnabled(v)); } catch (e) { console.error(e); }
+  };
+  const onNotif = async (v: boolean) => {
+    try { onSettingsUpdated(await setNotificationsEnabled(v)); } catch (e) { console.error(e); }
+  };
+  const onAuto = async (v: boolean) => {
+    try { onSettingsUpdated(await setAutoStart(v)); } catch (e) { console.error(e); }
+  };
+  const onTray = async (v: boolean) => {
+    try { onSettingsUpdated(await setCloseToTray(v)); } catch (e) { console.error(e); }
+  };
+  const onUntrust = async (name: string) => {
+    try { onSettingsUpdated(await untrustDevice(name)); } catch (e) { console.error(e); }
+  };
+  const onClearHistory = async () => {
+    try { await clearHistory(); setHistory([]); } catch (e) { console.error(e); }
+  };
+
+  const trusted = Object.values(session.settings.trustedDevices ?? {});
+
+  return (
+    <Drawer
+      open={isOpen}
+      onOpenChange={(_, d) => onOpenChange(d.open)}
+      position="end"
+      size="medium"
+    >
+      <DrawerHeader>
+        <DrawerHeaderTitle
+          action={
+            <Button
+              appearance="subtle"
+              aria-label={t("settings.close")}
+              icon={<Dismiss20Regular />}
+              onClick={() => onOpenChange(false)}
+            />
+          }
+        >
+          {t("settings.title")}
+        </DrawerHeaderTitle>
+      </DrawerHeader>
+      <DrawerBody>
+        <div className={styles.settingsSection}>
+          <span className={styles.sectionLabel}>{t("settings.appearance")}</span>
+          <Field label={t("settings.theme")}>
+            <RadioGroup
+              value={session.settings.theme ?? "system"}
+              onChange={(_, d) => onTheme(d.value as ThemePref)}
+              layout="horizontal"
+            >
+              <Radio value="system" label={t("settings.themeSystem")} />
+              <Radio value="light" label={t("settings.themeLight")} />
+              <Radio value="dark" label={t("settings.themeDark")} />
+            </RadioGroup>
+          </Field>
+        </div>
+
+        <div className={styles.settingsSection}>
+          <span className={styles.sectionLabel}>{t("settings.notifications")}</span>
+          <div className={styles.settingsRow}>
+            <span>{t("settings.soundEnabled")}</span>
+            <Switch checked={session.settings.soundEnabled ?? true} onChange={(_, d) => onSound(d.checked)} />
+          </div>
+          <div className={styles.settingsRow}>
+            <span>{t("settings.notificationsEnabled")}</span>
+            <Switch checked={session.settings.notificationsEnabled ?? true} onChange={(_, d) => onNotif(d.checked)} />
+          </div>
+        </div>
+
+        <div className={styles.settingsSection}>
+          <span className={styles.sectionLabel}>{t("settings.behaviour")}</span>
+          <div className={styles.settingsRow}>
+            <span>{t("settings.autoStart")}</span>
+            <Switch checked={session.settings.autoStart ?? false} onChange={(_, d) => onAuto(d.checked)} />
+          </div>
+          <div className={styles.settingsRow}>
+            <span>{t("settings.closeToTray")}</span>
+            <Switch checked={session.settings.closeToTray ?? false} onChange={(_, d) => onTray(d.checked)} />
+          </div>
+        </div>
+
+        <div className={styles.settingsSection}>
+          <span className={styles.sectionLabel}>{t("settings.trustedDevices")}</span>
+          {trusted.length === 0 ? (
+            <Caption1>{t("settings.trustedEmpty")}</Caption1>
+          ) : (
+            trusted.map((d) => (
+              <div key={d.name} className={styles.trustedItem}>
+                <span>{d.name}</span>
+                <Button
+                  size="small"
+                  appearance="subtle"
+                  icon={<Delete20Regular />}
+                  onClick={() => onUntrust(d.name)}
+                  aria-label={t("settings.untrust")}
+                >
+                  {t("settings.untrust")}
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className={styles.settingsSection}>
+          <div className={styles.settingsRow}>
+            <span className={styles.sectionLabel}>{t("settings.recent")}</span>
+            {history.length > 0 && (
+              <Button size="small" appearance="subtle" onClick={onClearHistory}>{t("settings.clear")}</Button>
+            )}
+          </div>
+          {history.length === 0 ? (
+            <Caption1>{t("settings.recentEmpty")}</Caption1>
+          ) : (
+            history.slice(0, 50).map((r) => (
+              <div key={r.id} className={styles.historyRow}>
+                <span>
+                  {r.direction === "send" ? "↑" : "↓"} {formatBytes(r.bytes)} · {r.peer}
+                </span>
+                <span style={{
+                  color: r.success ? tokens.colorPaletteGreenForeground1 : tokens.colorPaletteRedForeground1,
+                }}>
+                  {r.success ? "✓" : "✗"}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </DrawerBody>
+    </Drawer>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
 
 function App() {
   const styles = useStyles();
-  const theme = useSystemTheme();
   const { t } = useTranslation();
 
   const [session, setSession] = useState<Session | null>(null);
   const [peers, setPeers] = useState<Record<string, Peer>>({});
   const [active, setActive] = useState<Record<string, ActiveTransfer>>({});
-  const [completed, setCompleted] = useState<CompletedRow[]>([]);
   const [incoming, setIncoming] = useState<IncomingPending | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const theme = useEffectiveTheme(session?.settings.theme);
 
   const [selectedPeer, setSelectedPeer] = useState<Peer | null>(null);
   const [manualIp, setManualIp] = useState("");
@@ -514,7 +648,10 @@ function App() {
 
   const incomingRef = useRef<IncomingPending | null>(null);
   incomingRef.current = incoming;
+  const sessionRef = useRef<Session | null>(null);
+  sessionRef.current = session;
 
+  // Initial session load.
   useEffect(() => {
     (async () => {
       try {
@@ -527,6 +664,7 @@ function App() {
     })();
   }, []);
 
+  // Receiver-ready → refresh session.
   useEffect(() => {
     let stop: Unlisten | undefined;
     onReceiverReady(async () => {
@@ -535,6 +673,7 @@ function App() {
     return () => { stop?.(); };
   }, []);
 
+  // Subscriptions.
   useEffect(() => {
     const unsubs: Promise<Unlisten>[] = [];
     unsubs.push(onTransferStarted((e: TransferStarted) => {
@@ -559,26 +698,35 @@ function App() {
     }));
     unsubs.push(onTransferCompleted((e: TransferCompleted) => {
       setActive((prev) => {
-        const a = prev[e.id];
-        const elapsedMs = e.elapsedMs || (a ? performance.now() - a.startedAt : 1);
-        const mbps = elapsedMs > 0 ? (e.totalBytes / (elapsedMs / 1000)) / (1024 * 1024) : 0;
-        setCompleted((cs) => [
-          { id: e.id, direction: e.direction, ok: e.success,
-            msg: e.success ? t("history.success") : e.error ?? "—", mbps, bytes: e.totalBytes },
-          ...cs.slice(0, 19),
-        ]);
         const { [e.id]: _g, ...rest } = prev; return rest;
       });
+      const s = sessionRef.current?.settings;
+      if (s?.soundEnabled !== false) playChime("done");
+      if (s?.notificationsEnabled !== false) {
+        const title = e.success
+          ? (e.direction === "send" ? t("active.send") : t("active.recv"))
+          : t("step3.errorTitle");
+        const body = e.success
+          ? `${formatBytes(e.totalBytes)} · ${(e.elapsedMs / 1000).toFixed(1)}s`
+          : (e.error ?? "—");
+        notify(`LanBlaze · ${title}`, body);
+      }
     }));
     unsubs.push(onPeerAdded((p: Peer) => setPeers((prev) => ({ ...prev, [p.instance]: p }))));
     unsubs.push(onPeerRemoved((instance: string) => setPeers((prev) => {
       const { [instance]: _g, ...rest } = prev; return rest;
     })));
     unsubs.push(onIncomingRequest((r: IncomingRequest) => {
-      setIncoming({ request: r, overrideDir: null });
+      setIncoming({ request: r, overrideDir: null, trust: false });
+      const s = sessionRef.current?.settings;
+      if (s?.soundEnabled !== false) playChime("incoming");
+      if (s?.notificationsEnabled !== false) {
+        notify(`LanBlaze · ${t("incoming.title")}`, `${r.deviceName} · ${r.fileCount} · ${formatBytes(r.totalBytes)}`);
+      }
     }));
     return () => { unsubs.forEach((u) => u.then((fn) => fn()).catch(() => {})); };
-  }, [t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const win = getCurrentWebviewWindow();
@@ -668,6 +816,10 @@ function App() {
     const pending = incomingRef.current;
     if (!pending) return;
     try {
+      if (accept && pending.trust) {
+        const updated = await trustDevice(pending.request.deviceName);
+        setSession((s) => (s ? { ...s, settings: updated } : s));
+      }
       await respondIncoming(pending.request.id, accept, pending.overrideDir ?? undefined);
     } catch (e) { console.error(e); }
     finally { setIncoming(null); }
@@ -694,14 +846,10 @@ function App() {
 
   const target = selectedPeer
     ? `${selectedPeer.deviceName} · ${selectedPeer.addresses[0]}:${selectedPeer.port}`
-    : manualIp
-      ? `${manualIp}:${session.defaultPort}`
-      : null;
-  const canSend =
-    !busySend &&
-    selectedPaths.length > 0 &&
-    peerCode.replace(/\D/g, "").length === 6 &&
-    (!!selectedPeer || manualIp.trim().length > 0);
+    : manualIp ? `${manualIp}:${session.defaultPort}` : null;
+  const canSend = !busySend && selectedPaths.length > 0
+    && peerCode.replace(/\D/g, "").length === 6
+    && (!!selectedPeer || manualIp.trim().length > 0);
 
   return (
     <FluentProvider theme={theme} style={{ backgroundColor: "transparent" }}>
@@ -712,43 +860,39 @@ function App() {
             <div className={styles.device}>
               {session.settings.deviceName}
               <Tooltip content={t("topbar.renameDevice")} relationship="label">
-                <Button
-                  size="small" appearance="subtle"
-                  icon={<Edit20Regular />}
+                <Button size="small" appearance="subtle" icon={<Edit20Regular />}
                   onClick={handleRenameDevice}
-                  style={{ marginLeft: 8 }}
-                />
+                  aria-label={t("topbar.renameDevice")}
+                  style={{ marginLeft: 8 }} />
               </Tooltip>
             </div>
             <div className={styles.statusRow}>
               <Wifi120Regular />
               <Caption1>{session.localIp ?? "—"}</Caption1>
               {session.receiverRunning ? (
-                <Badge appearance="tint" color="success">
-                  {t("topbar.listening")} · :{session.receiverPort}
-                </Badge>
+                <Badge appearance="tint" color="success">{t("topbar.listening")} · :{session.receiverPort}</Badge>
               ) : (
                 <>
                   <Badge appearance="tint" color="danger">{t("topbar.notListening")}</Badge>
-                  <Button size="small" appearance="primary" onClick={startReceiverNow}>
-                    {t("topbar.startListening")}
-                  </Button>
+                  <Button size="small" appearance="primary" onClick={startReceiverNow}>{t("topbar.startListening")}</Button>
                 </>
               )}
             </div>
           </div>
           <div className={styles.topbarRight}>
             <LanguagePicker />
+            <Tooltip content={t("topbar.openSettings")} relationship="label">
+              <Button appearance="subtle" icon={<Settings20Regular />}
+                onClick={() => setShowSettings(true)}
+                aria-label={t("topbar.openSettings")} />
+            </Tooltip>
             <div className={styles.codeBlock}>
               <div className={styles.codeLabel}>{t("topbar.pairingCode")}</div>
               <div className={styles.codeValueRow}>
                 <span className={styles.codeValue}>{session.authCode}</span>
                 <Tooltip content={t("topbar.newCode")} relationship="label">
-                  <Button
-                    size="small" appearance="subtle"
-                    icon={<ArrowSync20Regular />}
-                    onClick={handleRegenerate}
-                  />
+                  <Button size="small" appearance="subtle" icon={<ArrowSync20Regular />}
+                    onClick={handleRegenerate} aria-label={t("topbar.newCode")} />
                 </Tooltip>
               </div>
             </div>
@@ -759,84 +903,61 @@ function App() {
           <div style={{ display: "flex", alignItems: "center", gap: 8, color: tokens.colorNeutralForeground3, fontSize: 13 }}>
             <Folder20Regular />
             <span>{t("receiveFolder.label")}: {session.settings.saveDir}</span>
-            <Button size="small" appearance="subtle" onClick={handleChangeSaveDir}>
-              {t("common.change")}
-            </Button>
+            <Button size="small" appearance="subtle" onClick={handleChangeSaveDir}>{t("common.change")}</Button>
           </div>
 
-          <section>
+          <section aria-labelledby="step1-label">
             <div className={styles.sectionHead}>
-              <span className={styles.sectionLabel}>{t("step1.label")}</span>
+              <span id="step1-label" className={styles.sectionLabel}>{t("step1.label")}</span>
               <span className={styles.emptyHint}>
-                {selectedPaths.length > 0
-                  ? t("step1.hintCount", { count: selectedPaths.length })
-                  : t("step1.hintEmpty")}
+                {selectedPaths.length > 0 ? t("step1.hintCount", { count: selectedPaths.length }) : t("step1.hintEmpty")}
               </span>
             </div>
-            <DropZone
-              paths={selectedPaths}
-              dragOver={dragOver}
-              onPickFiles={pickFiles}
-              onPickFolder={pickFolder}
-              onClear={clearPaths}
-              onRemoveOne={removeOne}
-            />
+            <DropZone paths={selectedPaths} dragOver={dragOver}
+              onPickFiles={pickFiles} onPickFolder={pickFolder}
+              onClear={clearPaths} onRemoveOne={removeOne} />
           </section>
 
-          <section>
+          <section aria-labelledby="step2-label">
             <div className={styles.sectionHead}>
-              <span className={styles.sectionLabel}>{t("step2.label")}</span>
+              <span id="step2-label" className={styles.sectionLabel}>{t("step2.label")}</span>
               <Button size="small" appearance="subtle" onClick={() => setShowManualIp((v) => !v)}>
                 {showManualIp ? t("step2.toggleList") : t("step2.toggleManual")}
               </Button>
             </div>
             {showManualIp ? (
               <Field hint={t("step2.manualHint")}>
-                <Input
-                  value={manualIp}
-                  onChange={(_, d) => { setManualIp(d.value); setSelectedPeer(null); }}
-                  placeholder={t("step2.manualPlaceholder")}
-                />
+                <Input value={manualIp} onChange={(_, d) => { setManualIp(d.value); setSelectedPeer(null); }}
+                  placeholder={t("step2.manualPlaceholder")} />
               </Field>
             ) : peerList.length === 0 ? (
               <div className={styles.emptyHint}>{t("step2.empty")}</div>
             ) : (
               <div className={styles.peerGrid}>
                 {peerList.map((p) => (
-                  <PeerTile
-                    key={p.instance}
-                    peer={p}
+                  <PeerTile key={p.instance} peer={p}
                     active={selectedPeer?.instance === p.instance}
-                    onSelect={() => { setSelectedPeer(p); setManualIp(""); }}
-                  />
+                    onSelect={() => { setSelectedPeer(p); setManualIp(""); }} />
                 ))}
               </div>
             )}
           </section>
 
-          <section>
+          <section aria-labelledby="step3-label">
             <div className={styles.sectionHead}>
-              <span className={styles.sectionLabel}>{t("step3.label")}</span>
+              <span id="step3-label" className={styles.sectionLabel}>{t("step3.label")}</span>
               {target && <span className={styles.emptyHint}>{t("step3.targetPrefix")}: {target}</span>}
             </div>
             <div className={styles.composeRow}>
               <div className={styles.codeInputWrap}>
-                <Input
-                  value={peerCode}
+                <Input value={peerCode}
                   onChange={(_, d) => setPeerCode(d.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="000000"
-                  size="large"
-                  style={{ letterSpacing: "0.18em", fontVariantNumeric: "tabular-nums" }}
-                />
+                  placeholder="000000" size="large"
+                  aria-label={t("step3.label")}
+                  style={{ letterSpacing: "0.18em", fontVariantNumeric: "tabular-nums" }} />
               </div>
-              <Button
-                appearance="primary"
-                size="large"
-                icon={<Send20Filled />}
-                onClick={handleSend}
-                disabled={!canSend}
-                className={styles.sendButton}
-              >
+              <Button appearance="primary" size="large" icon={<Send20Filled />}
+                onClick={handleSend} disabled={!canSend} className={styles.sendButton}>
                 {busySend ? t("step3.sending") : t("step3.send")}
               </Button>
             </div>
@@ -851,9 +972,9 @@ function App() {
           </section>
 
           {activeList.length > 0 && (
-            <section>
+            <section aria-labelledby="active-label">
               <div className={styles.sectionHead}>
-                <span className={styles.sectionLabel}>{t("active.label")}</span>
+                <span id="active-label" className={styles.sectionLabel}>{t("active.label")}</span>
               </div>
               {activeList.map((a) => {
                 const ratio = a.totalBytes > 0 ? a.totalBytesDone / a.totalBytes : 0;
@@ -879,29 +1000,6 @@ function App() {
               })}
             </section>
           )}
-
-          {completed.length > 0 && (
-            <section>
-              <div className={styles.sectionHead}>
-                <span className={styles.sectionLabel}>{t("history.label")}</span>
-              </div>
-              <Divider style={{ marginBottom: 8 }} />
-              {completed.map((c) => (
-                <div key={c.id} className={styles.historyRow}>
-                  <span>
-                    {c.direction === "send" ? "↑" : "↓"} {formatBytes(c.bytes)} · {c.mbps.toFixed(1)} MB/s
-                  </span>
-                  <span style={{
-                    color: c.ok
-                      ? tokens.colorPaletteGreenForeground1
-                      : tokens.colorPaletteRedForeground1,
-                  }}>
-                    {c.msg}
-                  </span>
-                </div>
-              ))}
-            </section>
-          )}
         </div>
 
         <Dialog open={incoming !== null} modalType="alert">
@@ -925,21 +1023,20 @@ function App() {
                     </Body1>
                     <Divider />
                     <div>
-                      <div className={styles.codeLabel} style={{ marginBottom: 4 }}>
-                        {t("incoming.folder")}
-                      </div>
+                      <div className={styles.codeLabel} style={{ marginBottom: 4 }}>{t("incoming.folder")}</div>
                       <div style={{ fontSize: 13, color: tokens.colorNeutralForeground2 }}>
                         {incoming.overrideDir ?? session.settings.saveDir}
                       </div>
-                      <Button
-                        size="small" appearance="subtle"
-                        icon={<Folder20Regular />}
-                        onClick={pickIncomingDir}
-                        style={{ marginTop: 4 }}
-                      >
+                      <Button size="small" appearance="subtle" icon={<Folder20Regular />}
+                        onClick={pickIncomingDir} style={{ marginTop: 4 }}>
                         {t("incoming.overrideButton")}
                       </Button>
                     </div>
+                    <Checkbox
+                      label={t("incoming.trustCheck")}
+                      checked={incoming.trust}
+                      onChange={(_, d) => setIncoming({ ...incoming, trust: !!d.checked })}
+                    />
                   </div>
                 )}
               </DialogContent>
@@ -958,6 +1055,13 @@ function App() {
             </DialogBody>
           </DialogSurface>
         </Dialog>
+
+        <SettingsDrawer
+          open={showSettings}
+          onOpenChange={setShowSettings}
+          session={session}
+          onSettingsUpdated={(s) => setSession({ ...session, settings: s })}
+        />
       </div>
     </FluentProvider>
   );

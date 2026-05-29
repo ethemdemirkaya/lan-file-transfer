@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   common: { select: "اختيار", change: "تغيير", clear: "مسح", busy: "جارٍ التحميل…" },
   setup: {
     brand: "LANBLAZE",
@@ -11,6 +11,7 @@ export default {
     preparing: "جارٍ التحضير…",
   },
   topbar: {
+    openSettings: "الإعدادات",
     listening: "في وضع الاستقبال",
     notListening: "متوقف",
     startListening: "تشغيل",
@@ -59,6 +60,7 @@ export default {
   active: { label: "عمليات النقل النشطة", send: "↑ إرسال", recv: "↓ استقبال", files: "ملف" },
   history: { label: "آخر عمليات النقل", success: "تمّ" },
   incoming: {
+    trustCheck: "الثقة دائماً بهذا الجهاز",
     title: "طلب استقبال",
     summary_one: "يريد إرسال ملف واحد ({{size}}) إليك.",
     summary_other: "يريد إرسال {{count}} ملف ({{size}}) إليك.",
@@ -66,6 +68,7 @@ export default {
     overrideButton: "حفظ في مجلد آخر",
     accept: "قبول",
     reject: "رفض",
-  },
+  },  settings: {"title":"الإعدادات","appearance":"المظهر","theme":"السمة","themeSystem":"نظام","themeLight":"فاتح","themeDark":"داكن","notifications":"الإشعارات والصوت","soundEnabled":"تشغيل صوت عند الاستقبال","notificationsEnabled":"إظهار إشعارات النظام","behaviour":"السلوك","autoStart":"تشغيل LanBlaze عند بدء التشغيل","closeToTray":"الاستمرار في شريط النظام عند إغلاق النافذة","trustedDevices":"الأجهزة الموثوقة","trustedEmpty":"لا توجد بعد. حدّد «الثقة دائماً» عند قبول عملية نقل.","untrust":"إزالة","recent":"النشاط الأخير","recentEmpty":"لا شيء بعد.","clear":"مسح","close":"إغلاق"},
+
   lang: { label: "اللغة" },
 };

@@ -1,11 +1,39 @@
-//! Persistent user settings (device name, default receive directory).
-//! Stored as `settings.json` under the OS app-data directory. The 6-digit
-//! pairing code is in-memory only — it lives for the current app session
-//! and rotates on demand.
+//! Persistent user settings (device name, default receive directory,
+//! trusted devices, theme, sound, auto-start). Stored as `settings.json`
+//! under the OS app-config directory. The 6-digit pairing code is in-memory
+//! only — it lives for the current app session and rotates on demand.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+/// Theme preference. "system" follows the OS, the others force a side.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThemePref {
+    System,
+    Light,
+    Dark,
+}
+
+impl Default for ThemePref {
+    fn default() -> Self {
+        ThemePref::System
+    }
+}
+
+/// A peer the user marked as trusted — their transfers skip the
+/// accept/reject dialog and land directly in the default save dir.
+/// Keyed by the sender's device name; an identity that's easy to spoof,
+/// but on a trusted LAN that's the same risk surface as the pairing
+/// code itself. A future TLS-pinned identity would replace this key.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrustedDevice {
+    pub name: String,
+    pub trusted_at: i64,
+}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -13,6 +41,22 @@ pub struct UserSettings {
     pub device_name: String,
     pub save_dir: String,
     pub configured: bool,
+    #[serde(default)]
+    pub theme: ThemePref,
+    #[serde(default = "default_true")]
+    pub sound_enabled: bool,
+    #[serde(default = "default_true")]
+    pub notifications_enabled: bool,
+    #[serde(default)]
+    pub auto_start: bool,
+    #[serde(default)]
+    pub close_to_tray: bool,
+    #[serde(default)]
+    pub trusted_devices: HashMap<String, TrustedDevice>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 pub fn load(dir: &Path) -> UserSettings {
@@ -39,8 +83,6 @@ pub fn random_code() -> String {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.subsec_nanos() as u64 ^ d.as_secs())
         .unwrap_or(0);
-    // xorshift for a little extra mixing — this is not security-sensitive,
-    // just a per-session token to avoid accidental cross-talk.
     let mut x = nanos.wrapping_mul(0x9E3779B97F4A7C15).wrapping_add(1);
     x ^= x >> 30;
     x = x.wrapping_mul(0xBF58476D1CE4E5B9);

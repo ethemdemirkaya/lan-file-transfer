@@ -1,10 +1,35 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+export type ThemePref = "system" | "light" | "dark";
+
+export interface TrustedDevice {
+  name: string;
+  trustedAt: number;
+}
+
 export interface UserSettings {
   deviceName: string;
   saveDir: string;
   configured: boolean;
+  theme: ThemePref;
+  soundEnabled: boolean;
+  notificationsEnabled: boolean;
+  autoStart: boolean;
+  closeToTray: boolean;
+  trustedDevices: Record<string, TrustedDevice>;
+}
+
+export interface HistoryRecord {
+  id: string;
+  direction: "send" | "recv";
+  peer: string;
+  bytes: number;
+  fileCount: number;
+  elapsedMs: number;
+  success: boolean;
+  error: string | null;
+  finishedAt: number;
 }
 
 export interface Session {
@@ -74,8 +99,25 @@ export interface ReceiverReady {
 export const getSession = () => invoke<Session>("get_session");
 export const saveSettings = (deviceName: string, saveDir: string) =>
   invoke<UserSettings>("save_settings", { deviceName, saveDir });
+export const setTheme = (theme: ThemePref) =>
+  invoke<UserSettings>("set_theme", { theme });
+export const setSoundEnabled = (enabled: boolean) =>
+  invoke<UserSettings>("set_sound_enabled", { enabled });
+export const setNotificationsEnabled = (enabled: boolean) =>
+  invoke<UserSettings>("set_notifications_enabled", { enabled });
+export const setCloseToTray = (enabled: boolean) =>
+  invoke<UserSettings>("set_close_to_tray", { enabled });
+export const setAutoStart = (enabled: boolean) =>
+  invoke<UserSettings>("set_auto_start", { enabled });
+export const trustDevice = (deviceName: string) =>
+  invoke<UserSettings>("trust_device", { deviceName });
+export const untrustDevice = (deviceName: string) =>
+  invoke<UserSettings>("untrust_device", { deviceName });
+export const getHistory = () => invoke<{ records: HistoryRecord[] }>("get_history");
+export const clearHistory = () => invoke<void>("clear_history");
 export const regenerateCode = () => invoke<string>("regenerate_code");
 export const ensureReceiver = () => invoke<number>("ensure_receiver");
+export const showMainWindow = () => invoke<void>("show_main_window");
 export const respondIncoming = (
   id: string,
   accept: boolean,

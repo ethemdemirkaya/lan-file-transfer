@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   common: { select: "Select", change: "Change", clear: "Clear", busy: "Loading…" },
   setup: {
     brand: "LANBLAZE",
@@ -11,6 +11,7 @@ export default {
     preparing: "Preparing…",
   },
   topbar: {
+    openSettings: "Settings",
     listening: "Listening",
     notListening: "Not listening",
     startListening: "Start",
@@ -59,6 +60,7 @@ export default {
   active: { label: "Active transfers", send: "↑ Sending", recv: "↓ Receiving", files: "files" },
   history: { label: "Recent transfers", success: "Done" },
   incoming: {
+    trustCheck: "Always trust this device",
     title: "Incoming transfer",
     summary_one: "wants to send you {{count}} file ({{size}}).",
     summary_other: "wants to send you {{count}} files ({{size}}).",
@@ -66,6 +68,7 @@ export default {
     overrideButton: "Save somewhere else",
     accept: "Accept",
     reject: "Reject",
-  },
+  },  settings: {"title":"Settings","appearance":"Appearance","theme":"Theme","themeSystem":"System","themeLight":"Light","themeDark":"Dark","notifications":"Notifications \u0026 sound","soundEnabled":"Play a sound on incoming transfers","notificationsEnabled":"Show system notifications","behaviour":"Behaviour","autoStart":"Start LanBlaze when I sign in","closeToTray":"Keep running in the tray when I close the window","trustedDevices":"Trusted devices","trustedEmpty":"No trusted devices yet. Tick \u0027Always trust\u0027 when you accept a transfer.","untrust":"Remove","recent":"Recent activity","recentEmpty":"Nothing yet.","clear":"Clear","close":"Close"},
+
   lang: { label: "Language" },
 };

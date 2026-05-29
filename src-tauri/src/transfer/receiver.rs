@@ -16,11 +16,13 @@ use crate::events::{
     EVT_INCOMING_REQUEST, EVT_TRANSFER_COMPLETED, EVT_TRANSFER_PROGRESS, EVT_TRANSFER_STARTED,
 };
 use crate::hash::StreamHasher;
+use crate::history::{self, HistoryRecord};
 use crate::protocol::{Hello, HelloAck, CHUNK_SIZE, HASH_LEN};
 use crate::transfer::stream::write_resume_offset;
 use crate::state::{AppState, PendingDecision, UserDecision};
 use crate::transfer::stream::{read_file_header, read_json, write_json};
 use crate::transfer::{TransferError, TransferResult};
+use crate::{disk, settings};
 
 const REQUEST_TIMEOUT_SECS: u64 = 120;
 
@@ -151,7 +153,41 @@ async fn handle_connection(
         return Ok(());
     }
 
+    // Disk-space pre-check before bothering the user. Reject if we can't fit
+    // 1.05x the announced size on the destination volume.
+    {
+        let need = hello.total_bytes.saturating_add(hello.total_bytes / 20);
+        if let Some(avail) = disk::available_for(&save_dir) {
+            if need > avail {
+                let ack = HelloAck {
+                    accept: false,
+                    reason: Some(format!(
+                        "Yetersiz disk alanı: gereken ~{} bayt, mevcut {} bayt.",
+                        need, avail
+                    )),
+                };
+                write_json(&mut writer, &ack).await?;
+                writer.flush().await?;
+                warn!(
+                    "rejected transfer from {}: need {} bytes, only {} available",
+                    hello.device_name, need, avail
+                );
+                return Ok(());
+            }
+        }
+    }
+
+    // Auto-accept if this sender is in the trust list.
+    let trusted = {
+        let state: tauri::State<'_, AppState> = app.state();
+        let s = state.session.lock().unwrap();
+        s.settings.trusted_devices.contains_key(&hello.device_name)
+    };
+
     let id = Uuid::new_v4().to_string();
+    let started_total = hello.total_bytes;
+    let started_files = hello.file_count;
+    let sender_name = hello.device_name.clone();
     let request = IncomingRequest {
         id: id.clone(),
         peer: peer.clone(),
@@ -160,7 +196,15 @@ async fn handle_connection(
         file_count: hello.file_count,
         total_bytes: hello.total_bytes,
     };
-    let decision = await_user_decision(&app, &id, request).await;
+    let decision = if trusted {
+        info!("auto-accepting trusted sender: {}", hello.device_name);
+        // Still emit the incoming request so the UI can show it as in-flight.
+        let _ = app.emit(EVT_INCOMING_REQUEST, &request);
+        // Then immediately resolve it on our own.
+        UserDecision { accept: true, override_save_dir: None }
+    } else {
+        await_user_decision(&app, &id, request).await
+    };
     let ack = HelloAck {
         accept: decision.accept,
         reason: if decision.accept {
@@ -342,42 +386,45 @@ async fn handle_connection(
     .await;
 
     let elapsed_ms = started_at.elapsed().as_millis() as u64;
-    match result {
-        Ok(()) => {
-            let _ = app.emit(
-                EVT_TRANSFER_COMPLETED,
-                TransferCompleted {
-                    id,
-                    direction: "recv",
-                    success: true,
-                    error: None,
-                    elapsed_ms,
-                    total_bytes: total_done,
-                },
-            );
-            Ok(())
-        }
-        Err(e) => {
-            // Intentionally NOT deleting `.part` files on error: with resume
-            // support the next transfer should pick up where this one left
-            // off. Stale non-resumable .parts are wiped at the start of the
-            // next attempt for the same file (see the `truncate(true)` /
-            // explicit remove above).
-            let msg = format!("{e}");
-            let _ = app.emit(
-                EVT_TRANSFER_COMPLETED,
-                TransferCompleted {
-                    id,
-                    direction: "recv",
-                    success: false,
-                    error: Some(msg),
-                    elapsed_ms,
-                    total_bytes: total_done,
-                },
-            );
-            Err(e)
+    let (success, error) = match &result {
+        Ok(_) => (true, None),
+        Err(e) => (false, Some(format!("{e}"))),
+    };
+
+    // Persist to history.json so the UI can show it across restarts.
+    {
+        let state: tauri::State<'_, AppState> = app.state();
+        let cfg_dir = state.session.lock().unwrap().settings_dir.clone();
+        let record = HistoryRecord {
+            id: id.clone(),
+            direction: "recv".into(),
+            peer: format!("{sender_name} ({peer})"),
+            bytes: if success { started_total } else { total_done },
+            file_count: started_files,
+            elapsed_ms,
+            success,
+            error: error.clone(),
+            finished_at: history::now_ms(),
+        };
+        if let Err(e) = history::push(&cfg_dir, record) {
+            warn!("history append failed: {e}");
         }
     }
+
+    let _ = app.emit(
+        EVT_TRANSFER_COMPLETED,
+        TransferCompleted {
+            id,
+            direction: "recv",
+            success,
+            error,
+            elapsed_ms,
+            total_bytes: total_done,
+        },
+    );
+
+    let _ = settings::random_code; // silence import-use when no settings rotation here
+    result
 }
 
 // Touch File to avoid unused import warnings (kept for parity with sender).

@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   common: { select: "Выбрать", change: "Изменить", clear: "Очистить", busy: "Загрузка…" },
   setup: {
     brand: "LANBLAZE",
@@ -11,6 +11,7 @@ export default {
     preparing: "Подготовка…",
   },
   topbar: {
+    openSettings: "Настройки",
     listening: "Слушает",
     notListening: "Не слушает",
     startListening: "Запустить",
@@ -61,6 +62,7 @@ export default {
   active: { label: "Активные передачи", send: "↑ Отправка", recv: "↓ Приём", files: "файл(ов)" },
   history: { label: "Недавние передачи", success: "Готово" },
   incoming: {
+    trustCheck: "Всегда доверять этому устройству",
     title: "Входящая передача",
     summary_one: "хочет отправить вам {{count}} файл ({{size}}).",
     summary_few: "хочет отправить вам {{count}} файла ({{size}}).",
@@ -70,6 +72,7 @@ export default {
     overrideButton: "Сохранить в другую папку",
     accept: "Принять",
     reject: "Отклонить",
-  },
+  },  settings: {"title":"Настройки","appearance":"Внешний вид","theme":"Тема","themeSystem":"Системная","themeLight":"Светлая","themeDark":"Тёмная","notifications":"Уведомления и звук","soundEnabled":"Звук при входящих передачах","notificationsEnabled":"Системные уведомления","behaviour":"Поведение","autoStart":"Запускать LanBlaze при входе","closeToTray":"При закрытии окна оставаться в трее","trustedDevices":"Доверенные устройства","trustedEmpty":"Пока нет. Отметьте «Всегда доверять» при приёме передачи.","untrust":"Удалить","recent":"Недавняя активность","recentEmpty":"Пока ничего.","clear":"Очистить","close":"Закрыть"},
+
   lang: { label: "Язык" },
 };

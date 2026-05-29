@@ -1,6 +1,8 @@
+mod disk;
 mod discovery;
 mod events;
 mod hash;
+mod history;
 mod protocol;
 mod settings;
 mod state;
@@ -8,14 +10,18 @@ mod transfer;
 
 use std::path::PathBuf;
 
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState};
+use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
+use tauri_plugin_autostart::{ManagerExt as AutostartManagerExt, MacosLauncher};
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
 use crate::discovery::Discovery;
 use crate::events::{ReceiverReady, EVT_RECEIVER_READY};
+use crate::history::{History, HistoryRecord};
 use crate::protocol::{current_os, DEFAULT_PORT};
-use crate::settings::{random_code, UserSettings};
+use crate::settings::{random_code, ThemePref, TrustedDevice, UserSettings};
 use crate::state::{AppState, UserDecision};
 use crate::transfer::{
     receiver::start_receiver,
@@ -59,20 +65,113 @@ fn save_settings(
 ) -> Result<UserSettings, String> {
     let trimmed_name = device_name.trim().to_string();
     if trimmed_name.is_empty() {
-        return Err("Cihaz adı boş olamaz.".into());
+        return Err("Device name cannot be empty.".into());
     }
     let dir_path = PathBuf::from(&save_dir);
     if !dir_path.is_dir() {
         std::fs::create_dir_all(&dir_path)
-            .map_err(|e| format!("Klasör oluşturulamadı: {e}"))?;
+            .map_err(|e| format!("Couldn't create folder: {e}"))?;
     }
     let mut session = state.session.lock().unwrap();
     session.settings.device_name = trimmed_name;
     session.settings.save_dir = dir_path.to_string_lossy().into_owned();
     session.settings.configured = true;
     settings::save(&session.settings_dir, &session.settings)
-        .map_err(|e| format!("Ayarlar kaydedilemedi: {e}"))?;
+        .map_err(|e| format!("Couldn't save settings: {e}"))?;
     Ok(session.settings.clone())
+}
+
+#[tauri::command]
+fn set_theme(state: State<'_, AppState>, theme: String) -> Result<UserSettings, String> {
+    let pref = match theme.as_str() {
+        "light" => ThemePref::Light,
+        "dark" => ThemePref::Dark,
+        _ => ThemePref::System,
+    };
+    let mut s = state.session.lock().unwrap();
+    s.settings.theme = pref;
+    settings::save(&s.settings_dir, &s.settings).map_err(|e| e.to_string())?;
+    Ok(s.settings.clone())
+}
+
+#[tauri::command]
+fn set_sound_enabled(state: State<'_, AppState>, enabled: bool) -> Result<UserSettings, String> {
+    let mut s = state.session.lock().unwrap();
+    s.settings.sound_enabled = enabled;
+    settings::save(&s.settings_dir, &s.settings).map_err(|e| e.to_string())?;
+    Ok(s.settings.clone())
+}
+
+#[tauri::command]
+fn set_notifications_enabled(
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> Result<UserSettings, String> {
+    let mut s = state.session.lock().unwrap();
+    s.settings.notifications_enabled = enabled;
+    settings::save(&s.settings_dir, &s.settings).map_err(|e| e.to_string())?;
+    Ok(s.settings.clone())
+}
+
+#[tauri::command]
+fn set_close_to_tray(state: State<'_, AppState>, enabled: bool) -> Result<UserSettings, String> {
+    let mut s = state.session.lock().unwrap();
+    s.settings.close_to_tray = enabled;
+    settings::save(&s.settings_dir, &s.settings).map_err(|e| e.to_string())?;
+    Ok(s.settings.clone())
+}
+
+#[tauri::command]
+fn set_auto_start(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> Result<UserSettings, String> {
+    let autostart = app.autolaunch();
+    let res = if enabled {
+        autostart.enable()
+    } else {
+        autostart.disable()
+    };
+    res.map_err(|e| format!("Autostart toggle failed: {e}"))?;
+    let mut s = state.session.lock().unwrap();
+    s.settings.auto_start = enabled;
+    settings::save(&s.settings_dir, &s.settings).map_err(|e| e.to_string())?;
+    Ok(s.settings.clone())
+}
+
+#[tauri::command]
+fn trust_device(state: State<'_, AppState>, device_name: String) -> Result<UserSettings, String> {
+    let mut s = state.session.lock().unwrap();
+    s.settings.trusted_devices.insert(
+        device_name.clone(),
+        TrustedDevice {
+            name: device_name,
+            trusted_at: history::now_ms(),
+        },
+    );
+    settings::save(&s.settings_dir, &s.settings).map_err(|e| e.to_string())?;
+    Ok(s.settings.clone())
+}
+
+#[tauri::command]
+fn untrust_device(state: State<'_, AppState>, device_name: String) -> Result<UserSettings, String> {
+    let mut s = state.session.lock().unwrap();
+    s.settings.trusted_devices.remove(&device_name);
+    settings::save(&s.settings_dir, &s.settings).map_err(|e| e.to_string())?;
+    Ok(s.settings.clone())
+}
+
+#[tauri::command]
+fn get_history(state: State<'_, AppState>) -> History {
+    let dir = state.session.lock().unwrap().settings_dir.clone();
+    history::load(&dir)
+}
+
+#[tauri::command]
+fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
+    let dir = state.session.lock().unwrap().settings_dir.clone();
+    history::clear(&dir).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -80,6 +179,16 @@ fn regenerate_code(state: State<'_, AppState>) -> String {
     let new_code = random_code();
     state.session.lock().unwrap().auth_code = new_code.clone();
     new_code
+}
+
+#[tauri::command]
+fn show_main_window(app: AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -97,17 +206,20 @@ async fn ensure_receiver(
     let (save_dir, device_name) = {
         let s = state.session.lock().unwrap();
         if !s.settings.configured {
-            return Err("Ayarlar tamamlanmadı.".into());
+            return Err("Settings not configured.".into());
         }
-        (PathBuf::from(&s.settings.save_dir), s.settings.device_name.clone())
+        (
+            PathBuf::from(&s.settings.save_dir),
+            s.settings.device_name.clone(),
+        )
     };
     if !save_dir.is_dir() {
         std::fs::create_dir_all(&save_dir)
-            .map_err(|e| format!("Kayıt klasörü oluşturulamadı: {e}"))?;
+            .map_err(|e| format!("Couldn't create receive folder: {e}"))?;
     }
     let handle = start_receiver(app.clone(), save_dir.clone(), DEFAULT_PORT)
         .await
-        .map_err(|e| format!("Alıcı başlatılamadı: {e}"))?;
+        .map_err(|e| format!("Couldn't start receiver: {e}"))?;
     let actual_port = handle.port;
     {
         let mut r = state.receiver.lock().unwrap();
@@ -139,7 +251,7 @@ fn respond_incoming(
 ) -> Result<(), String> {
     let pending = state.pending.lock().unwrap().remove(&id);
     let Some(pending) = pending else {
-        return Err("İstek bulunamadı veya süresi doldu.".into());
+        return Err("Request not found or timed out.".into());
     };
     let decision = UserDecision {
         accept,
@@ -159,10 +271,10 @@ async fn send_paths(
     paths: Vec<String>,
 ) -> Result<String, String> {
     if paths.is_empty() {
-        return Err("En az bir dosya veya klasör seçin.".into());
+        return Err("Pick at least one file or folder.".into());
     }
     if auth_code.trim().len() != 6 {
-        return Err("Eşleştirme kodu 6 haneli olmalı.".into());
+        return Err("Pairing code must be 6 digits.".into());
     }
     let device_name = state.session.lock().unwrap().settings.device_name.clone();
     let port = port.unwrap_or(DEFAULT_PORT);
@@ -176,10 +288,10 @@ async fn send_paths(
         auth_code.trim().to_string(),
         &path_bufs,
     )
-    .map_err(|e| format!("Yollar okunamadı: {e}"))?;
+    .map_err(|e| format!("Couldn't read paths: {e}"))?;
 
     if req.items.is_empty() {
-        return Err("Seçimden gönderilecek dosya çıkmadı.".into());
+        return Err("No files in the selection.".into());
     }
 
     tauri::async_runtime::spawn(async move {
@@ -190,6 +302,52 @@ async fn send_paths(
     Ok(id)
 }
 
+// ---------------------------------------------------------------------------
+// Setup
+// ---------------------------------------------------------------------------
+
+fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    let show_item = MenuItem::with_id(app, "show", "Show LanBlaze", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+    let _ = TrayIconBuilder::with_id("main-tray")
+        .tooltip("LanBlaze")
+        .icon(app.default_window_icon().unwrap().clone())
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.unminimize();
+                    let _ = w.set_focus();
+                }
+            }
+            "quit" => {
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                let app = tray.app_handle();
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.unminimize();
+                    let _ = w.set_focus();
+                }
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt()
@@ -198,8 +356,13 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec!["--autostart"]),
+        ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
-            // Settings live in OS app-data dir.
             let settings_dir = app
                 .path()
                 .app_config_dir()
@@ -233,12 +396,18 @@ pub fn run() {
                 }
             }
 
+            if let Err(e) = build_tray(app.handle()) {
+                tracing::warn!("tray init failed: {e}");
+            }
+
             // Auto-start receiver if already configured.
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                let state: State<'_, AppState> = handle.state();
-                let configured = state.session.lock().unwrap().settings.configured;
-                drop(state);
+                let configured = {
+                    let state: State<'_, AppState> = handle.state();
+                    let v = state.session.lock().unwrap().settings.configured;
+                    v
+                };
                 if configured {
                     let app2 = handle.clone();
                     let s2: State<'_, AppState> = app2.state();
@@ -249,7 +418,27 @@ pub fn run() {
                 }
             });
 
+            // Hide window on launch if started via autostart.
+            let args: Vec<String> = std::env::args().collect();
+            if args.iter().any(|a| a == "--autostart") {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.hide();
+                }
+            }
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                // If close-to-tray is on, hide instead of quitting.
+                let app = window.app_handle();
+                let state: State<'_, AppState> = app.state();
+                let close_to_tray = state.session.lock().unwrap().settings.close_to_tray;
+                if close_to_tray {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             ping,
@@ -257,11 +446,37 @@ pub fn run() {
             get_default_port,
             get_session,
             save_settings,
+            set_theme,
+            set_sound_enabled,
+            set_notifications_enabled,
+            set_close_to_tray,
+            set_auto_start,
+            trust_device,
+            untrust_device,
+            get_history,
+            clear_history,
             regenerate_code,
             ensure_receiver,
             respond_incoming,
             send_paths,
+            show_main_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+// Silence the unused-import warning on platforms where Mica isn't applied.
+#[allow(dead_code)]
+fn _force_use_history() -> HistoryRecord {
+    HistoryRecord {
+        id: String::new(),
+        direction: String::new(),
+        peer: String::new(),
+        bytes: 0,
+        file_count: 0,
+        elapsed_ms: 0,
+        success: false,
+        error: None,
+        finished_at: 0,
+    }
 }

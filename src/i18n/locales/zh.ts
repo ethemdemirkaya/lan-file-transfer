@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   common: { select: "选择", change: "更改", clear: "清空", busy: "加载中…" },
   setup: {
     brand: "LANBLAZE",
@@ -11,6 +11,7 @@ export default {
     preparing: "正在准备…",
   },
   topbar: {
+    openSettings: "设置",
     listening: "正在监听",
     notListening: "未监听",
     startListening: "启动",
@@ -59,6 +60,7 @@ export default {
   active: { label: "进行中的传输", send: "↑ 发送", recv: "↓ 接收", files: "文件" },
   history: { label: "最近的传输", success: "完成" },
   incoming: {
+    trustCheck: "始终信任此设备",
     title: "接收请求",
     summary_one: "想给你发送 {{count}} 个文件（{{size}}）。",
     summary_other: "想给你发送 {{count}} 个文件（{{size}}）。",
@@ -66,6 +68,7 @@ export default {
     overrideButton: "保存到其他目录",
     accept: "接收",
     reject: "拒绝",
-  },
+  },  settings: {"title":"设置","appearance":"外观","theme":"主题","themeSystem":"跟随系统","themeLight":"浅色","themeDark":"深色","notifications":"通知和声音","soundEnabled":"收到传输时播放声音","notificationsEnabled":"显示系统通知","behaviour":"行为","autoStart":"登录时启动 LanBlaze","closeToTray":"关闭窗口后继续驻留托盘","trustedDevices":"受信任设备","trustedEmpty":"暂无。接收传输时勾选「始终信任」以添加。","untrust":"移除","recent":"最近活动","recentEmpty":"暂无。","clear":"清空","close":"关闭"},
+
   lang: { label: "语言" },
 };
