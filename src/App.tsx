@@ -66,6 +66,7 @@ import {
   sendNotification,
 } from "@tauri-apps/plugin-notification";
 import {
+  cancelTransfer,
   clearHistory,
   ensureReceiver,
   getHistory,
@@ -605,18 +606,27 @@ function SettingsDrawer({
           {history.length === 0 ? (
             <Caption1>{t("settings.recentEmpty")}</Caption1>
           ) : (
-            history.slice(0, 50).map((r) => (
-              <div key={r.id} className={styles.historyRow}>
-                <span>
-                  {r.direction === "send" ? "↑" : "↓"} {formatBytes(r.bytes)} · {r.peer}
-                </span>
-                <span style={{
-                  color: r.success ? tokens.colorPaletteGreenForeground1 : tokens.colorPaletteRedForeground1,
-                }}>
-                  {r.success ? "✓" : "✗"}
-                </span>
-              </div>
-            ))
+            history.slice(0, 50).map((r) => {
+              const label = r.success
+                ? "✓"
+                : r.error === "canceled_by_user"
+                  ? t("history.canceledByUser")
+                  : r.error === "canceled_by_peer"
+                    ? t("history.canceledByPeer")
+                    : "✗";
+              return (
+                <div key={r.id} className={styles.historyRow}>
+                  <span>
+                    {r.direction === "send" ? "↑" : "↓"} {formatBytes(r.bytes)} · {r.peer}
+                  </span>
+                  <span style={{
+                    color: r.success ? tokens.colorPaletteGreenForeground1 : tokens.colorPaletteRedForeground1,
+                  }}>
+                    {label}
+                  </span>
+                </div>
+              );
+            })
           )}
         </div>
       </DrawerBody>
@@ -710,12 +720,21 @@ function App() {
       const s = sessionRef.current?.settings;
       if (s?.soundEnabled !== false) playChime("done");
       if (s?.notificationsEnabled !== false) {
-        const title = e.success
-          ? (e.direction === "send" ? t("active.send") : t("active.recv"))
-          : t("step3.errorTitle");
-        const body = e.success
-          ? `${formatBytes(e.totalBytes)} · ${(e.elapsedMs / 1000).toFixed(1)}s`
-          : (e.error ?? "—");
+        let title: string;
+        let body: string;
+        if (e.success) {
+          title = e.direction === "send" ? t("active.send") : t("active.recv");
+          body = `${formatBytes(e.totalBytes)} · ${(e.elapsedMs / 1000).toFixed(1)}s`;
+        } else if (e.error === "canceled_by_user") {
+          title = t("history.canceledByUser");
+          body = e.direction === "send" ? t("active.send") : t("active.recv");
+        } else if (e.error === "canceled_by_peer") {
+          title = t("history.canceledByPeer");
+          body = e.direction === "send" ? t("active.send") : t("active.recv");
+        } else {
+          title = t("step3.errorTitle");
+          body = e.error ?? "—";
+        }
         notify(`LanBlaze · ${title}`, body);
       }
     }));
@@ -1016,12 +1035,23 @@ function App() {
                       <Body1Strong>
                         {a.direction === "send" ? t("active.send") : t("active.recv")} — {a.peer}
                       </Body1Strong>
-                      <span className={styles.peerMeta}>
-                        <b>{a.instantNetwork.toFixed(1)} MB/s</b>
-                        {" · "}
-                        <span title={t("active.average") as string}>
-                          ⌀ {avgMbps.toFixed(1)} MB/s
+                      <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <span className={styles.peerMeta}>
+                          <b>{a.instantNetwork.toFixed(1)} MB/s</b>
+                          {" · "}
+                          <span title={t("active.average") as string}>
+                            ⌀ {avgMbps.toFixed(1)} MB/s
+                          </span>
                         </span>
+                        <Tooltip content={t("active.cancel")} relationship="label">
+                          <Button
+                            size="small"
+                            appearance="subtle"
+                            icon={<Dismiss20Regular />}
+                            onClick={() => cancelTransfer(a.id).catch(console.error)}
+                            aria-label={t("active.cancel")}
+                          />
+                        </Tooltip>
                       </span>
                     </div>
                     <ProgressBar value={ratio} thickness="medium" />

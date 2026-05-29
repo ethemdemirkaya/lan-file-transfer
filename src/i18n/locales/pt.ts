@@ -58,8 +58,8 @@
     needCode: "Digite o código de 6 dígitos.",
     receiverFailed: "Não foi possível iniciar o receptor: {{error}}",
   },
-  active: { remaining_other: "restam {{count}}", disk: "disco", remaining_one: "resta {{count}}", network: "rede", avg: "média", label: "Transferências ativas", send: "↑ Enviando", recv: "↓ Recebendo", files: "arquivos" },
-  history: { label: "Transferências recentes", success: "Concluído" },
+  active: { cancel: "Cancelar", remaining_other: "restam {{count}}", disk: "disco", remaining_one: "resta {{count}}", network: "rede", avg: "média", label: "Transferências ativas", send: "↑ Enviando", recv: "↓ Recebendo", files: "arquivos" },
+  history: { canceledByUser: "Cancelado por você", canceledByPeer: "Cancelado pelo par", label: "Transferências recentes", success: "Concluído" },
   incoming: {
     trustCheck: "Sempre confiar neste dispositivo",
     title: "Transferência recebida",

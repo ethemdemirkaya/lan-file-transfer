@@ -10,6 +10,11 @@ pub struct AppState {
     pub receiver: Mutex<ReceiverState>,
     pub session: Mutex<SessionState>,
     pub pending: Mutex<HashMap<String, PendingDecision>>,
+    /// Per-transfer cancel handles. Either side of a transfer (sender or
+    /// receiver) can register an oneshot here keyed by transfer id; the
+    /// UI's cancel button sends () through it and the worker task wakes
+    /// up its `tokio::select!` to abort cleanly.
+    pub cancel: Mutex<HashMap<String, oneshot::Sender<()>>>,
 }
 
 pub struct PendingDecision {
@@ -45,6 +50,7 @@ impl AppState {
                 settings_dir,
             }),
             pending: Mutex::new(HashMap::new()),
+            cancel: Mutex::new(HashMap::new()),
         }
     }
 }

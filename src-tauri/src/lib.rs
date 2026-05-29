@@ -188,6 +188,19 @@ fn refresh_discovery(app: AppHandle, discovery: State<'_, Discovery>) -> Result<
 }
 
 #[tauri::command]
+fn cancel_transfer(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    let tx = state.cancel.lock().unwrap().remove(&id);
+    if let Some(tx) = tx {
+        let _ = tx.send(());
+        Ok(())
+    } else {
+        // Either the transfer already finished or never started — both are
+        // benign from the UI's point of view.
+        Ok(())
+    }
+}
+
+#[tauri::command]
 fn show_main_window(app: AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -466,6 +479,7 @@ pub fn run() {
             send_paths,
             show_main_window,
             refresh_discovery,
+            cancel_transfer,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

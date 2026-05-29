@@ -123,6 +123,7 @@ export const regenerateCode = () => invoke<string>("regenerate_code");
 export const ensureReceiver = () => invoke<number>("ensure_receiver");
 export const showMainWindow = () => invoke<void>("show_main_window");
 export const refreshDiscovery = () => invoke<void>("refresh_discovery");
+export const cancelTransfer = (id: string) => invoke<void>("cancel_transfer", { id });
 export const respondIncoming = (
   id: string,
   accept: boolean,

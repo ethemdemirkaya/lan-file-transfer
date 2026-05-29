@@ -58,8 +58,8 @@
     needCode: "6 haneli eşleştirme kodunu gir.",
     receiverFailed: "Alıcı başlatılamadı: {{error}}",
   },
-  active: { remaining_other: "{{count}} kaldı", disk: "diske", remaining_one: "{{count}} kaldı", network: "ağdan", avg: "ortalama", label: "Aktif transferler", send: "↑ Gönderim", recv: "↓ Alım", files: "dosya" },
-  history: { label: "Son aktarımlar", success: "Başarılı" },
+  active: { cancel: "Durdur", remaining_other: "{{count}} kaldı", disk: "diske", remaining_one: "{{count}} kaldı", network: "ağdan", avg: "ortalama", label: "Aktif transferler", send: "↑ Gönderim", recv: "↓ Alım", files: "dosya" },
+  history: { canceledByUser: "Sen iptal ettin", canceledByPeer: "Karşı taraf iptal etti", label: "Son aktarımlar", success: "Başarılı" },
   incoming: {
     trustCheck: "Bu cihaza her zaman güven",
     title: "Gelen dosya isteği",

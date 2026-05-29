@@ -58,8 +58,8 @@
     needCode: "6桁のペアリングコードを入力してください。",
     receiverFailed: "受信側を開始できませんでした: {{error}}",
   },
-  active: { remaining_other: "残り {{count}}", disk: "ディスク", remaining_one: "残り {{count}}", network: "ネットワーク", avg: "平均", label: "進行中の転送", send: "↑ 送信", recv: "↓ 受信", files: "ファイル" },
-  history: { label: "最近の転送", success: "完了" },
+  active: { cancel: "中止", remaining_other: "残り {{count}}", disk: "ディスク", remaining_one: "残り {{count}}", network: "ネットワーク", avg: "平均", label: "進行中の転送", send: "↑ 送信", recv: "↓ 受信", files: "ファイル" },
+  history: { canceledByUser: "あなたが中止", canceledByPeer: "相手が中止", label: "最近の転送", success: "完了" },
   incoming: {
     trustCheck: "この端末を常に信頼する",
     title: "受信リクエスト",

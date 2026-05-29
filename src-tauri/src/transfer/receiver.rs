@@ -246,19 +246,26 @@ async fn handle_connection(
         },
     );
 
-    let mut total_done: u64 = 0;
-    let mut files_done: u64 = 0;
-    let mut last_emit = Instant::now() - PROGRESS_INTERVAL;
-    let mut last_emit_net: u64 = 0;
-    let mut last_emit_disk: u64 = 0;
-    let mut buf = vec![0u8; CHUNK_SIZE];
-    let mut partial_files: Vec<PathBuf> = Vec::new();
-    // Cumulative bytes written to disk across all files in this connection.
-    // Shared with the per-file writer task so the main loop can compute the
-    // disk MB/s independently from the network MB/s.
+    // Register a cancel handle so the UI's stop button on the receiver
+    // side can abort the body loop. Sender side has its own registration
+    // in run_send.
+    let (cancel_tx, mut cancel_rx) = oneshot::channel::<()>();
+    {
+        let state: tauri::State<'_, AppState> = app.state();
+        state.cancel.lock().unwrap().insert(id.clone(), cancel_tx);
+    }
+
     let disk_counter = Arc::new(AtomicU64::new(0));
 
-    let result = async {
+    let body_fut = async {
+        let mut total_done: u64 = 0;
+        let mut files_done: u64 = 0;
+        let mut last_emit = Instant::now() - PROGRESS_INTERVAL;
+        let mut last_emit_net: u64 = 0;
+        let mut last_emit_disk: u64 = 0;
+        let mut buf = vec![0u8; CHUNK_SIZE];
+        let mut partial_files: Vec<PathBuf> = Vec::new();
+
         while let Some(header) = read_file_header(&mut reader).await? {
             let safe_rel = sanitize_relative_path(&header.rel_path)?;
             let final_path = save_dir.join(&safe_rel);
@@ -445,13 +452,47 @@ async fn handle_connection(
                 },
             );
         }
-        Ok::<(), TransferError>(())
+        // partial_files is intentionally kept so the user can clean up
+        // .part files manually if they want; with resume support they're
+        // valuable across runs.
+        let _ = partial_files;
+        Ok::<u64, TransferError>(total_done)
+    };
+    tokio::pin!(body_fut);
+    let (result, total_done): (TransferResult<()>, u64) = tokio::select! {
+        r = &mut body_fut => match r {
+            Ok(td) => (Ok(()), td),
+            Err(e) => (Err(e), 0),
+        },
+        _ = &mut cancel_rx => (Err(TransferError::Cancelled), 0),
+    };
+
+    // Drop the cancel handle.
+    {
+        let state: tauri::State<'_, AppState> = app.state();
+        state.cancel.lock().unwrap().remove(&id);
     }
-    .await;
 
     let elapsed_ms = started_at.elapsed().as_millis() as u64;
     let (success, error) = match &result {
         Ok(_) => (true, None),
+        Err(TransferError::Cancelled) => (false, Some("canceled_by_user".into())),
+        Err(TransferError::Io(io_err))
+            if matches!(
+                io_err.kind(),
+                std::io::ErrorKind::UnexpectedEof
+                    | std::io::ErrorKind::ConnectionAborted
+                    | std::io::ErrorKind::ConnectionReset
+                    | std::io::ErrorKind::BrokenPipe
+            ) =>
+        {
+            (false, Some("canceled_by_peer".into()))
+        }
+        Err(TransferError::Protocol(msg)) if msg.contains("unexpected EOF") => {
+            // The sender closed the socket mid-body; treat that as a peer
+            // cancel rather than a "protocol violation".
+            (false, Some("canceled_by_peer".into()))
+        }
         Err(e) => (false, Some(format!("{e}"))),
     };
 
@@ -475,10 +516,11 @@ async fn handle_connection(
         }
     }
 
+    let id_for_event = id.clone();
     let _ = app.emit(
         EVT_TRANSFER_COMPLETED,
         TransferCompleted {
-            id,
+            id: id_for_event,
             direction: "recv",
             success,
             error,

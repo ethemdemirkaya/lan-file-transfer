@@ -58,8 +58,8 @@
     needCode: "Saisis le code à 6 chiffres.",
     receiverFailed: "Impossible de démarrer le récepteur : {{error}}",
   },
-  active: { remaining_other: "{{count}} restants", disk: "disque", remaining_one: "{{count}} restant", network: "réseau", avg: "moyenne", label: "Transferts en cours", send: "↑ Envoi", recv: "↓ Réception", files: "fichiers" },
-  history: { label: "Transferts récents", success: "Terminé" },
+  active: { cancel: "Annuler", remaining_other: "{{count}} restants", disk: "disque", remaining_one: "{{count}} restant", network: "réseau", avg: "moyenne", label: "Transferts en cours", send: "↑ Envoi", recv: "↓ Réception", files: "fichiers" },
+  history: { canceledByUser: "Annulé par toi", canceledByPeer: "Annulé par le pair", label: "Transferts récents", success: "Terminé" },
   incoming: {
     trustCheck: "Toujours faire confiance à cet appareil",
     title: "Transfert entrant",

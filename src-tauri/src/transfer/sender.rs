@@ -80,10 +80,34 @@ pub async fn run_send(app: AppHandle, req: SendRequest) -> TransferResult<()> {
     let id = req.id.clone();
     let peer_label = req.peer_addr.clone();
 
-    let result = do_send(&app, req, started_at, total_bytes, file_count, id.clone()).await;
+    // Register a cancel handle so the UI's stop button can abort us.
+    let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
+    {
+        let state: tauri::State<'_, AppState> = app.state();
+        state.cancel.lock().unwrap().insert(id.clone(), cancel_tx);
+    }
+
+    let do_send_fut = do_send(&app, req, started_at, total_bytes, file_count, id.clone());
+    tokio::pin!(do_send_fut);
+    let result: TransferResult<u64> = tokio::select! {
+        r = &mut do_send_fut => r,
+        _ = cancel_rx => Err(TransferError::Cancelled),
+    };
+
+    // Drop the cancel handle regardless of outcome (idempotent if the
+    // command already pulled it out).
+    {
+        let state: tauri::State<'_, AppState> = app.state();
+        state.cancel.lock().unwrap().remove(&id);
+    }
+
     let elapsed_ms = started_at.elapsed().as_millis() as u64;
     let (success, error, bytes_sent) = match &result {
         Ok(bytes) => (true, None, *bytes),
+        Err(TransferError::Cancelled) => (false, Some("canceled_by_user".into()), 0u64),
+        Err(TransferError::Io(io_err)) if is_peer_closed(io_err) => {
+            (false, Some("canceled_by_peer".into()), 0u64)
+        }
         Err(e) => (false, Some(format!("{e}")), 0u64),
     };
 
@@ -317,6 +341,18 @@ async fn do_send(
     }
 
     Ok(total_done)
+}
+
+/// True when the io error looks like the other end yanked the connection
+/// (typical when the peer's user pressed the cancel button).
+fn is_peer_closed(e: &std::io::Error) -> bool {
+    matches!(
+        e.kind(),
+        std::io::ErrorKind::UnexpectedEof
+            | std::io::ErrorKind::ConnectionAborted
+            | std::io::ErrorKind::ConnectionReset
+            | std::io::ErrorKind::BrokenPipe
+    )
 }
 
 async fn send_bytes(tx: &mpsc::Sender<WriterCmd>, bytes: Vec<u8>) -> TransferResult<()> {
