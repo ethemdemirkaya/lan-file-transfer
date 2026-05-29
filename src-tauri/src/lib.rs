@@ -361,7 +361,6 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
         ))
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let settings_dir = app
                 .path()
