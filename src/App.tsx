@@ -182,8 +182,33 @@ const useStyles = makeStyles({
   composeRow: { display: "grid", gridTemplateColumns: "1fr auto", gap: tokens.spacingHorizontalM, alignItems: "end" },
   codeInputWrap: { display: "flex", flexDirection: "column", gap: "4px" },
   sendButton: { alignSelf: "stretch" },
-  transferRow: { display: "flex", flexDirection: "column", gap: "4px", ...shorthands.padding(tokens.spacingVerticalS, "0") },
+  transferRow: { display: "flex", flexDirection: "column", gap: "6px", ...shorthands.padding(tokens.spacingVerticalS, "0") },
   transferHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px" },
+  metricsRow: {
+    display: "flex",
+    gap: tokens.spacingHorizontalXL,
+    flexWrap: "wrap",
+    alignItems: "flex-end",
+    fontVariantNumeric: "tabular-nums",
+    marginTop: "4px",
+  },
+  metric: { display: "flex", flexDirection: "column", gap: "2px", minWidth: "0" },
+  metricLabel: {
+    fontSize: "10px",
+    fontWeight: 600,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: tokens.colorNeutralForeground3,
+    lineHeight: 1,
+  },
+  metricValue: { fontSize: "14px", fontWeight: 600, lineHeight: 1.2 },
+  metricValueMuted: { fontSize: "13px", fontWeight: 400, lineHeight: 1.2, color: tokens.colorNeutralForeground2 },
+  metricSecondary: {
+    fontSize: "12px",
+    color: tokens.colorNeutralForeground3,
+    fontVariantNumeric: "tabular-nums",
+    marginTop: "2px",
+  },
   historyRow: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", color: tokens.colorNeutralForeground3, ...shorthands.padding("2px", "0") },
   setupRoot: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", ...shorthands.padding(tokens.spacingVerticalXXL) },
   setupCard: { width: "100%", maxWidth: "440px", display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL, ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalXXXL), backgroundColor: tokens.colorNeutralBackground1, borderRadius: tokens.borderRadiusXLarge },
@@ -230,6 +255,28 @@ function formatBytes(n: number): string {
 function basename(p: string): string {
   const parts = p.split(/[\\/]/);
   return parts[parts.length - 1] || p;
+}
+
+/// Format an ETA in seconds as a compact human string: "27s" / "2m 15s"
+/// / "1h 30m" / "2d 4h". Returns "—" when the rate is too unstable to
+/// estimate (zero / non-finite).
+function formatEta(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return "—";
+  if (seconds < 1) return "<1s";
+  if (seconds < 60) return `${Math.floor(seconds)}s`;
+  if (seconds < 3600) {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}m ${s}s`;
+  }
+  if (seconds < 86400) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${h}h ${m}m`;
+  }
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  return `${d}d ${h}h`;
 }
 
 function playChime(kind: "incoming" | "done"): void {
@@ -1019,63 +1066,73 @@ function App() {
                 const avgMbps = a.totalBytesDone / elapsedS / (1024 * 1024);
                 const remainingFiles = Math.max(0, a.filesTotal - a.filesDone);
                 const remainingBytes = Math.max(0, a.totalBytes - a.totalBytesDone);
-                const etaSec = a.instantNetwork > 0.01
-                  ? remainingBytes / (a.instantNetwork * 1024 * 1024)
-                  : null;
-                const eta = etaSec === null
-                  ? "—"
-                  : etaSec < 60
-                    ? `${etaSec.toFixed(0)}s`
-                    : etaSec < 3600
-                      ? `${(etaSec / 60).toFixed(1)}m`
-                      : `${(etaSec / 3600).toFixed(1)}h`;
+                // Use the slower side as the ETA pacer: if disk can't keep up
+                // with the network, the network MB/s is misleading.
+                const pacerMbps = a.direction === "recv" && a.instantDisk > 0
+                  ? Math.min(a.instantNetwork, a.instantDisk)
+                  : a.instantNetwork;
+                const etaSec = pacerMbps > 0.01
+                  ? remainingBytes / (pacerMbps * 1024 * 1024)
+                  : NaN;
+                const eta = formatEta(etaSec);
                 return (
                   <div key={a.id} className={styles.transferRow}>
                     <div className={styles.transferHeader}>
                       <Body1Strong>
                         {a.direction === "send" ? t("active.send") : t("active.recv")} — {a.peer}
                       </Body1Strong>
-                      <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <span className={styles.peerMeta}>
-                          <b>{a.instantNetwork.toFixed(1)} MB/s</b>
-                          {" · "}
-                          <span title={t("active.average") as string}>
-                            ⌀ {avgMbps.toFixed(1)} MB/s
-                          </span>
-                        </span>
-                        <Tooltip content={t("active.cancel")} relationship="label">
-                          <Button
-                            size="small"
-                            appearance="subtle"
-                            icon={<Dismiss20Regular />}
-                            onClick={() => cancelTransfer(a.id).catch(console.error)}
-                            aria-label={t("active.cancel")}
-                          />
-                        </Tooltip>
-                      </span>
+                      <Tooltip content={t("active.cancel")} relationship="label">
+                        <Button
+                          size="small"
+                          appearance="subtle"
+                          icon={<Dismiss20Regular />}
+                          onClick={() => cancelTransfer(a.id).catch(console.error)}
+                          aria-label={t("active.cancel")}
+                        />
+                      </Tooltip>
                     </div>
                     <ProgressBar value={ratio} thickness="medium" />
-                    <div style={{
-                      display: "flex", justifyContent: "space-between",
-                      alignItems: "center", gap: 8, fontSize: 12,
-                      color: tokens.colorNeutralForeground3,
-                      fontVariantNumeric: "tabular-nums",
-                    }}>
-                      <span>
-                        {formatBytes(a.totalBytesDone)} / {formatBytes(a.totalBytes)}
-                        {" · "}
-                        {a.filesDone}/{a.filesTotal} {t("active.files")}
-                        {" · "}
-                        <span>{t("active.remaining", { count: remainingFiles })}</span>
-                        {" · ETA "}{eta}
-                      </span>
-                      {a.direction === "recv" && (
-                        <span>
-                          {t("active.network")}: <b>{a.instantNetwork.toFixed(1)}</b> MB/s
-                          {" · "}
-                          {t("active.disk")}: <b>{a.instantDisk.toFixed(1)}</b> MB/s
-                        </span>
+                    <div className={styles.metricsRow}>
+                      {a.direction === "send" ? (
+                        <div className={styles.metric}>
+                          <span className={styles.metricLabel}>{t("active.now")}</span>
+                          <span className={styles.metricValue}>
+                            {a.instantNetwork.toFixed(1)} MB/s
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className={styles.metric}>
+                            <span className={styles.metricLabel}>{t("active.network")}</span>
+                            <span className={styles.metricValue}>
+                              {a.instantNetwork.toFixed(1)} MB/s
+                            </span>
+                          </div>
+                          <div className={styles.metric}>
+                            <span className={styles.metricLabel}>{t("active.disk")}</span>
+                            <span className={styles.metricValue}>
+                              {a.instantDisk.toFixed(1)} MB/s
+                            </span>
+                          </div>
+                        </>
                       )}
+                      <div className={styles.metric}>
+                        <span className={styles.metricLabel}>{t("active.average")}</span>
+                        <span className={styles.metricValueMuted}>
+                          {avgMbps.toFixed(1)} MB/s
+                        </span>
+                      </div>
+                      <div className={styles.metric}>
+                        <span className={styles.metricLabel}>{t("active.eta")}</span>
+                        <span className={styles.metricValueMuted}>{eta}</span>
+                      </div>
+                    </div>
+                    <div className={styles.metricSecondary}>
+                      {formatBytes(a.totalBytesDone)} / {formatBytes(a.totalBytes)}
+                      {" · "}
+                      {a.filesDone}/{a.filesTotal} {t("active.files")}
+                      {" · "}
+                      {t("active.remaining", { count: remainingFiles })}
                     </div>
                     {a.currentFile && (
                       <span className={styles.peerMeta} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

@@ -58,7 +58,7 @@
     needCode: "Enter the 6-digit pairing code.",
     receiverFailed: "Couldn't start the receiver: {{error}}",
   },
-  active: { cancel: "Cancel", remaining_other: "{{count}} left", disk: "disk", remaining_one: "{{count}} left", network: "network", avg: "average", label: "Active transfers", send: "↑ Sending", recv: "↓ Receiving", files: "files" },
+  active: { now: "Now", eta: "ETA", cancel: "Cancel", remaining_other: "{{count}} left", disk: "disk", remaining_one: "{{count}} left", network: "network", avg: "average", label: "Active transfers", send: "↑ Sending", recv: "↓ Receiving", files: "files" },
   history: { canceledByUser: "Canceled by you", canceledByPeer: "Canceled by peer", label: "Recent transfers", success: "Done" },
   incoming: {
     trustCheck: "Always trust this device",

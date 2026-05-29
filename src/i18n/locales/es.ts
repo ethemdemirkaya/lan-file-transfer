@@ -58,7 +58,7 @@
     needCode: "Introduce el código de 6 dígitos.",
     receiverFailed: "No se pudo iniciar el receptor: {{error}}",
   },
-  active: { cancel: "Cancelar", remaining_other: "quedan {{count}}", disk: "disco", remaining_one: "queda {{count}}", network: "red", avg: "promedio", label: "Transferencias activas", send: "↑ Enviando", recv: "↓ Recibiendo", files: "archivos" },
+  active: { now: "Ahora", eta: "Restante", cancel: "Cancelar", remaining_other: "quedan {{count}}", disk: "disco", remaining_one: "queda {{count}}", network: "red", avg: "promedio", label: "Transferencias activas", send: "↑ Enviando", recv: "↓ Recibiendo", files: "archivos" },
   history: { canceledByUser: "Cancelado por ti", canceledByPeer: "Cancelado por el par", label: "Transferencias recientes", success: "Hecho" },
   incoming: {
     trustCheck: "Confiar siempre en este dispositivo",

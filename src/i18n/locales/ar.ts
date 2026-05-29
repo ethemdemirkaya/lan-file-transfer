@@ -58,7 +58,7 @@
     needCode: "أدخل رمز الإقران المؤلف من 6 أرقام.",
     receiverFailed: "تعذّر تشغيل المستقبل: {{error}}",
   },
-  active: { cancel: "إلغاء", remaining_other: "متبقي {{count}}", disk: "القرص", remaining_one: "متبقي واحد", network: "الشبكة", avg: "المتوسط", label: "عمليات النقل النشطة", send: "↑ إرسال", recv: "↓ استقبال", files: "ملف" },
+  active: { now: "الآن", eta: "الوقت المتبقي", cancel: "إلغاء", remaining_other: "متبقي {{count}}", disk: "القرص", remaining_one: "متبقي واحد", network: "الشبكة", avg: "المتوسط", label: "عمليات النقل النشطة", send: "↑ إرسال", recv: "↓ استقبال", files: "ملف" },
   history: { canceledByUser: "ألغيت بواسطتك", canceledByPeer: "ألغاها الطرف الآخر", label: "آخر عمليات النقل", success: "تمّ" },
   incoming: {
     trustCheck: "الثقة دائماً بهذا الجهاز",

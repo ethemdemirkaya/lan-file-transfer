@@ -58,7 +58,7 @@
     needCode: "Gib den 6-stelligen Code ein.",
     receiverFailed: "Empfänger konnte nicht gestartet werden: {{error}}",
   },
-  active: { cancel: "Abbrechen", remaining_other: "{{count}} verbleibend", disk: "Disk", remaining_one: "{{count}} verbleibend", network: "Netz", avg: "Durchschnitt", label: "Aktive Übertragungen", send: "↑ Senden", recv: "↓ Empfangen", files: "Dateien" },
+  active: { now: "Aktuell", eta: "Verbleibend", cancel: "Abbrechen", remaining_other: "{{count}} verbleibend", disk: "Disk", remaining_one: "{{count}} verbleibend", network: "Netz", avg: "Durchschnitt", label: "Aktive Übertragungen", send: "↑ Senden", recv: "↓ Empfangen", files: "Dateien" },
   history: { canceledByUser: "Von dir abgebrochen", canceledByPeer: "Vom Gegenüber abgebrochen", label: "Letzte Übertragungen", success: "Fertig" },
   incoming: {
     trustCheck: "Diesem Gerät immer vertrauen",
