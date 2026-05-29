@@ -39,6 +39,7 @@
     remove: "Убрать",
   },
   step2: {
+    refresh: "Обновить",
     label: "2 · Какому устройству",
     toggleManual: "Вручную IP",
     toggleList: "Список",
@@ -59,7 +60,7 @@
     needCode: "Введите 6-значный код.",
     receiverFailed: "Не удалось запустить приёмник: {{error}}",
   },
-  active: { label: "Активные передачи", send: "↑ Отправка", recv: "↓ Приём", files: "файл(ов)" },
+  active: { remaining_one: "осталось {{count}}", avg: "среднее", network: "сеть", remaining_few: "осталось {{count}}", remaining_many: "осталось {{count}}", disk: "диск", remaining_other: "осталось {{count}}", label: "Активные передачи", send: "↑ Отправка", recv: "↓ Приём", files: "файл(ов)" },
   history: { label: "Недавние передачи", success: "Готово" },
   incoming: {
     trustCheck: "Всегда доверять этому устройству",

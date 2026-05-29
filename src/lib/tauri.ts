@@ -70,6 +70,10 @@ export interface TransferProgress {
   totalBytes: number;
   filesDone: number;
   filesTotal: number;
+  /// Instant rate across the last emit interval, MB/s.
+  instantMbpsNetwork: number;
+  /// Receiver-only; 0 for sends.
+  instantMbpsDisk: number;
 }
 
 export interface TransferCompleted {
@@ -118,6 +122,7 @@ export const clearHistory = () => invoke<void>("clear_history");
 export const regenerateCode = () => invoke<string>("regenerate_code");
 export const ensureReceiver = () => invoke<number>("ensure_receiver");
 export const showMainWindow = () => invoke<void>("show_main_window");
+export const refreshDiscovery = () => invoke<void>("refresh_discovery");
 export const respondIncoming = (
   id: string,
   accept: boolean,

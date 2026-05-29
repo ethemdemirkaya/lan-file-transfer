@@ -37,6 +37,7 @@
     remove: "إزالة",
   },
   step2: {
+    refresh: "تحديث",
     label: "٢ · إلى أي جهاز",
     toggleManual: "IP يدوي",
     toggleList: "القائمة",
@@ -57,7 +58,7 @@
     needCode: "أدخل رمز الإقران المؤلف من 6 أرقام.",
     receiverFailed: "تعذّر تشغيل المستقبل: {{error}}",
   },
-  active: { label: "عمليات النقل النشطة", send: "↑ إرسال", recv: "↓ استقبال", files: "ملف" },
+  active: { remaining_other: "متبقي {{count}}", disk: "القرص", remaining_one: "متبقي واحد", network: "الشبكة", avg: "المتوسط", label: "عمليات النقل النشطة", send: "↑ إرسال", recv: "↓ استقبال", files: "ملف" },
   history: { label: "آخر عمليات النقل", success: "تمّ" },
   incoming: {
     trustCheck: "الثقة دائماً بهذا الجهاز",

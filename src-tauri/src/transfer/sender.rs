@@ -131,6 +131,7 @@ async fn do_send(
     let mut total_done: u64 = 0;
     let mut files_done: u64 = 0;
     let mut last_emit = Instant::now() - PROGRESS_INTERVAL;
+    let mut last_emit_bytes: u64 = 0;
     let mut buf = vec![0u8; CHUNK_SIZE];
 
     for item in &req.items {
@@ -171,7 +172,12 @@ async fn do_send(
                 total_done = total_done.saturating_add(sent);
             }
             if last_emit.elapsed() >= PROGRESS_INTERVAL {
+                let elapsed = last_emit.elapsed().as_secs_f64().max(0.001);
+                let inst = (total_done.saturating_sub(last_emit_bytes)) as f64
+                    / elapsed
+                    / (1024.0 * 1024.0);
                 last_emit = Instant::now();
+                last_emit_bytes = total_done;
                 let _ = app.emit(
                     EVT_TRANSFER_PROGRESS,
                     TransferProgress {
@@ -184,6 +190,8 @@ async fn do_send(
                         total_bytes,
                         files_done,
                         files_total: file_count,
+                        instant_mbps_network: inst,
+                        instant_mbps_disk: 0.0,
                     },
                 );
             }
@@ -203,6 +211,8 @@ async fn do_send(
                 total_bytes,
                 files_done,
                 files_total: file_count,
+                instant_mbps_network: 0.0,
+                instant_mbps_disk: 0.0,
             },
         );
     }

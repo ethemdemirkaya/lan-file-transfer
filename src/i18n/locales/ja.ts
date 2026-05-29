@@ -37,6 +37,7 @@
     remove: "削除",
   },
   step2: {
+    refresh: "再検索",
     label: "2 · どの端末へ",
     toggleManual: "手動IP",
     toggleList: "一覧",
@@ -57,7 +58,7 @@
     needCode: "6桁のペアリングコードを入力してください。",
     receiverFailed: "受信側を開始できませんでした: {{error}}",
   },
-  active: { label: "進行中の転送", send: "↑ 送信", recv: "↓ 受信", files: "ファイル" },
+  active: { remaining_other: "残り {{count}}", disk: "ディスク", remaining_one: "残り {{count}}", network: "ネットワーク", avg: "平均", label: "進行中の転送", send: "↑ 送信", recv: "↓ 受信", files: "ファイル" },
   history: { label: "最近の転送", success: "完了" },
   incoming: {
     trustCheck: "この端末を常に信頼する",

@@ -29,6 +29,13 @@ pub struct TransferProgress {
     pub total_bytes: u64,
     pub files_done: u64,
     pub files_total: u64,
+    /// Instantaneous MB/s on the network side (TCP read for receivers,
+    /// disk read + socket write for senders), computed over the last
+    /// emit interval. Always present.
+    pub instant_mbps_network: f64,
+    /// Receiver-only: instantaneous MB/s being written to the local disk.
+    /// Sender always sets this to 0; the UI should hide it for sends.
+    pub instant_mbps_disk: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -80,6 +80,7 @@ import {
   onTransferProgress,
   onTransferStarted,
   Peer,
+  refreshDiscovery,
   regenerateCode,
   respondIncoming,
   saveSettings,
@@ -284,6 +285,8 @@ interface ActiveTransfer {
   totalBytesDone: number;
   currentFile: string;
   startedAt: number;
+  instantNetwork: number;
+  instantDisk: number;
 }
 
 interface IncomingPending {
@@ -684,6 +687,7 @@ function App() {
           filesTotal: e.fileCount, filesDone: 0,
           totalBytes: e.totalBytes, totalBytesDone: 0,
           currentFile: "", startedAt: performance.now(),
+          instantNetwork: 0, instantDisk: 0,
         },
       }));
     }));
@@ -693,7 +697,10 @@ function App() {
         return { ...prev, [e.id]: { ...a,
           filesDone: e.filesDone, filesTotal: e.filesTotal,
           totalBytes: e.totalBytes, totalBytesDone: e.totalBytesDone,
-          currentFile: e.currentFile } };
+          currentFile: e.currentFile,
+          instantNetwork: e.instantMbpsNetwork,
+          instantDisk: e.instantMbpsDisk,
+        } };
       });
     }));
     unsubs.push(onTransferCompleted((e: TransferCompleted) => {
@@ -921,9 +928,20 @@ function App() {
           <section aria-labelledby="step2-label">
             <div className={styles.sectionHead}>
               <span id="step2-label" className={styles.sectionLabel}>{t("step2.label")}</span>
-              <Button size="small" appearance="subtle" onClick={() => setShowManualIp((v) => !v)}>
-                {showManualIp ? t("step2.toggleList") : t("step2.toggleManual")}
-              </Button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Button
+                  size="small"
+                  appearance="subtle"
+                  icon={<ArrowSync20Regular />}
+                  onClick={() => refreshDiscovery().catch(console.error)}
+                  aria-label={t("step2.refresh")}
+                >
+                  {t("step2.refresh")}
+                </Button>
+                <Button size="small" appearance="subtle" onClick={() => setShowManualIp((v) => !v)}>
+                  {showManualIp ? t("step2.toggleList") : t("step2.toggleManual")}
+                </Button>
+              </div>
             </div>
             {showManualIp ? (
               <Field hint={t("step2.manualHint")}>
@@ -979,7 +997,19 @@ function App() {
               {activeList.map((a) => {
                 const ratio = a.totalBytes > 0 ? a.totalBytesDone / a.totalBytes : 0;
                 const elapsedS = Math.max(0.001, (performance.now() - a.startedAt) / 1000);
-                const mbps = a.totalBytesDone / elapsedS / (1024 * 1024);
+                const avgMbps = a.totalBytesDone / elapsedS / (1024 * 1024);
+                const remainingFiles = Math.max(0, a.filesTotal - a.filesDone);
+                const remainingBytes = Math.max(0, a.totalBytes - a.totalBytesDone);
+                const etaSec = a.instantNetwork > 0.01
+                  ? remainingBytes / (a.instantNetwork * 1024 * 1024)
+                  : null;
+                const eta = etaSec === null
+                  ? "—"
+                  : etaSec < 60
+                    ? `${etaSec.toFixed(0)}s`
+                    : etaSec < 3600
+                      ? `${(etaSec / 60).toFixed(1)}m`
+                      : `${(etaSec / 3600).toFixed(1)}h`;
                 return (
                   <div key={a.id} className={styles.transferRow}>
                     <div className={styles.transferHeader}>
@@ -987,14 +1017,41 @@ function App() {
                         {a.direction === "send" ? t("active.send") : t("active.recv")} — {a.peer}
                       </Body1Strong>
                       <span className={styles.peerMeta}>
-                        {mbps.toFixed(1)} MB/s · {a.filesDone}/{a.filesTotal} {t("active.files")}
+                        <b>{a.instantNetwork.toFixed(1)} MB/s</b>
+                        {" · "}
+                        <span title={t("active.average") as string}>
+                          ⌀ {avgMbps.toFixed(1)} MB/s
+                        </span>
                       </span>
                     </div>
                     <ProgressBar value={ratio} thickness="medium" />
-                    <span className={styles.peerMeta}>
-                      {formatBytes(a.totalBytesDone)} / {formatBytes(a.totalBytes)}
-                      {a.currentFile && ` · ${a.currentFile}`}
-                    </span>
+                    <div style={{
+                      display: "flex", justifyContent: "space-between",
+                      alignItems: "center", gap: 8, fontSize: 12,
+                      color: tokens.colorNeutralForeground3,
+                      fontVariantNumeric: "tabular-nums",
+                    }}>
+                      <span>
+                        {formatBytes(a.totalBytesDone)} / {formatBytes(a.totalBytes)}
+                        {" · "}
+                        {a.filesDone}/{a.filesTotal} {t("active.files")}
+                        {" · "}
+                        <span>{t("active.remaining", { count: remainingFiles })}</span>
+                        {" · ETA "}{eta}
+                      </span>
+                      {a.direction === "recv" && (
+                        <span>
+                          {t("active.network")}: <b>{a.instantNetwork.toFixed(1)}</b> MB/s
+                          {" · "}
+                          {t("active.disk")}: <b>{a.instantDisk.toFixed(1)}</b> MB/s
+                        </span>
+                      )}
+                    </div>
+                    {a.currentFile && (
+                      <span className={styles.peerMeta} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {a.currentFile}
+                      </span>
+                    )}
                   </div>
                 );
               })}

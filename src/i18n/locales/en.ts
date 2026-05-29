@@ -37,6 +37,7 @@
     remove: "Remove",
   },
   step2: {
+    refresh: "Refresh",
     label: "2 · Which device",
     toggleManual: "Manual IP",
     toggleList: "List",
@@ -57,7 +58,7 @@
     needCode: "Enter the 6-digit pairing code.",
     receiverFailed: "Couldn't start the receiver: {{error}}",
   },
-  active: { label: "Active transfers", send: "↑ Sending", recv: "↓ Receiving", files: "files" },
+  active: { remaining_other: "{{count}} left", disk: "disk", remaining_one: "{{count}} left", network: "network", avg: "average", label: "Active transfers", send: "↑ Sending", recv: "↓ Receiving", files: "files" },
   history: { label: "Recent transfers", success: "Done" },
   incoming: {
     trustCheck: "Always trust this device",

@@ -182,6 +182,12 @@ fn regenerate_code(state: State<'_, AppState>) -> String {
 }
 
 #[tauri::command]
+fn refresh_discovery(app: AppHandle, discovery: State<'_, Discovery>) -> Result<(), String> {
+    discovery.refresh(app);
+    Ok(())
+}
+
+#[tauri::command]
 fn show_main_window(app: AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -459,6 +465,7 @@ pub fn run() {
             respond_incoming,
             send_paths,
             show_main_window,
+            refresh_discovery,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

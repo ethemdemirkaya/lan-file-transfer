@@ -39,6 +39,16 @@ pub struct Discovery {
 struct DiscoveryInner {
     daemon: Option<ServiceDaemon>,
     self_instance: Mutex<Option<String>>,
+    /// Last advertisement metadata, so `refresh()` can re-broadcast our
+    /// own service when the user nudges the UI.
+    last_ad: Mutex<Option<AdMeta>>,
+}
+
+#[derive(Clone)]
+struct AdMeta {
+    device_name: String,
+    os: String,
+    port: u16,
 }
 
 impl Discovery {
@@ -54,6 +64,7 @@ impl Discovery {
             inner: Arc::new(DiscoveryInner {
                 daemon,
                 self_instance: Mutex::new(None),
+                last_ad: Mutex::new(None),
             }),
         }
     }
@@ -148,7 +159,44 @@ impl Discovery {
         info!("mdns advertising as {fullname} on {local_ip}:{port}");
         daemon.register(info)?;
         *self.inner.self_instance.lock().unwrap() = Some(fullname);
+        *self.inner.last_ad.lock().unwrap() = Some(AdMeta {
+            device_name: device_name.to_string(),
+            os: os.to_string(),
+            port,
+        });
         Ok(())
+    }
+
+    /// User-triggered refresh: re-broadcast our own advertisement (so a
+    /// peer that came up after us notices us right away) and re-issue the
+    /// browse query (so we pick up peers whose join announcements we may
+    /// have missed). Symmetric to what mdns-sd already does in the
+    /// background but with shorter intervals.
+    pub fn refresh(&self, app: AppHandle) {
+        let Some(daemon) = self.inner.daemon.as_ref() else {
+            return;
+        };
+        // 1) Re-issue the browse — drop the new receiver immediately, the
+        //    existing background loop keeps consuming events. This is mostly
+        //    a side-effect to make the daemon resend the question on the
+        //    wire.
+        match daemon.browse(SERVICE_TYPE) {
+            Ok(rx) => {
+                drop(rx);
+            }
+            Err(e) => warn!("refresh browse failed: {e}"),
+        }
+        // 2) Re-broadcast our own advertisement by unregister+register.
+        let ad = self.inner.last_ad.lock().unwrap().clone();
+        if let Some(ad) = ad {
+            self.unadvertise();
+            if let Err(e) = self.advertise(&ad.device_name, &ad.os, ad.port) {
+                warn!("refresh re-advertise failed: {e}");
+            }
+        }
+        // 3) Also restart the browser thread so any new ServiceResolved
+        //    events from this refresh reach the UI.
+        self.start_browser(app);
     }
 
     pub fn unadvertise(&self) {

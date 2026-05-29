@@ -37,6 +37,7 @@
     remove: "Kaldır",
   },
   step2: {
+    refresh: "Yenile",
     label: "2 · Hangi cihaza",
     toggleManual: "Manuel IP",
     toggleList: "Liste",
@@ -57,7 +58,7 @@
     needCode: "6 haneli eşleştirme kodunu gir.",
     receiverFailed: "Alıcı başlatılamadı: {{error}}",
   },
-  active: { label: "Aktif transferler", send: "↑ Gönderim", recv: "↓ Alım", files: "dosya" },
+  active: { remaining_other: "{{count}} kaldı", disk: "diske", remaining_one: "{{count}} kaldı", network: "ağdan", avg: "ortalama", label: "Aktif transferler", send: "↑ Gönderim", recv: "↓ Alım", files: "dosya" },
   history: { label: "Son aktarımlar", success: "Başarılı" },
   incoming: {
     trustCheck: "Bu cihaza her zaman güven",

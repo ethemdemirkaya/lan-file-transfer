@@ -37,6 +37,7 @@
     remove: "移除",
   },
   step2: {
+    refresh: "刷新",
     label: "2 · 发送给哪台设备",
     toggleManual: "手动 IP",
     toggleList: "列表",
@@ -57,7 +58,7 @@
     needCode: "请输入 6 位配对码。",
     receiverFailed: "无法启动接收端：{{error}}",
   },
-  active: { label: "进行中的传输", send: "↑ 发送", recv: "↓ 接收", files: "文件" },
+  active: { remaining_other: "剩 {{count}}", disk: "磁盘", remaining_one: "剩 {{count}}", network: "网络", avg: "平均", label: "进行中的传输", send: "↑ 发送", recv: "↓ 接收", files: "文件" },
   history: { label: "最近的传输", success: "完成" },
   incoming: {
     trustCheck: "始终信任此设备",

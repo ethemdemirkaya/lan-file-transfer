@@ -37,6 +37,7 @@
     remove: "Remover",
   },
   step2: {
+    refresh: "Atualizar",
     label: "2 · Para qual dispositivo",
     toggleManual: "IP manual",
     toggleList: "Lista",
@@ -57,7 +58,7 @@
     needCode: "Digite o código de 6 dígitos.",
     receiverFailed: "Não foi possível iniciar o receptor: {{error}}",
   },
-  active: { label: "Transferências ativas", send: "↑ Enviando", recv: "↓ Recebendo", files: "arquivos" },
+  active: { remaining_other: "restam {{count}}", disk: "disco", remaining_one: "resta {{count}}", network: "rede", avg: "média", label: "Transferências ativas", send: "↑ Enviando", recv: "↓ Recebendo", files: "arquivos" },
   history: { label: "Transferências recentes", success: "Concluído" },
   incoming: {
     trustCheck: "Sempre confiar neste dispositivo",

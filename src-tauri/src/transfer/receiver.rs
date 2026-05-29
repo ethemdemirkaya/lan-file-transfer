@@ -1,13 +1,14 @@
 use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
@@ -241,8 +242,14 @@ async fn handle_connection(
     let mut total_done: u64 = 0;
     let mut files_done: u64 = 0;
     let mut last_emit = Instant::now() - PROGRESS_INTERVAL;
+    let mut last_emit_net: u64 = 0;
+    let mut last_emit_disk: u64 = 0;
     let mut buf = vec![0u8; CHUNK_SIZE];
     let mut partial_files: Vec<PathBuf> = Vec::new();
+    // Cumulative bytes written to disk across all files in this connection.
+    // Shared with the per-file writer task so the main loop can compute the
+    // disk MB/s independently from the network MB/s.
+    let disk_counter = Arc::new(AtomicU64::new(0));
 
     let result = async {
         while let Some(header) = read_file_header(&mut reader).await? {
@@ -294,24 +301,40 @@ async fn handle_connection(
                     hasher.update(&tmp[..n]);
                     read += n as u64;
                 }
+                // Bytes already on disk count toward both the running disk
+                // total and the disk-rate baseline (otherwise the next emit
+                // would falsely spike by resume_offset MB).
+                disk_counter.fetch_add(resume_offset, Ordering::Relaxed);
+                last_emit_disk = last_emit_disk.saturating_add(resume_offset);
             }
 
-            let mut out = BufWriter::with_capacity(
-                CHUNK_SIZE,
-                if resume_offset > 0 {
-                    OpenOptions::new()
-                        .append(true)
-                        .open(&part_path)
-                        .await?
-                } else {
-                    OpenOptions::new()
-                        .create(true)
-                        .write(true)
-                        .truncate(true)
-                        .open(&part_path)
-                        .await?
-                },
-            );
+            let out_file = if resume_offset > 0 {
+                OpenOptions::new().append(true).open(&part_path).await?
+            } else {
+                OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(&part_path)
+                    .await?
+            };
+
+            // Read side and write side run as separate tasks connected by
+            // a bounded channel. That decouples the two halves so we can
+            // measure them independently and so a slower disk doesn't
+            // stall the receive socket beyond ~CAP*CHUNK bytes of buffer.
+            const CHANNEL_CAP: usize = 8;
+            let (tx, mut rx) = mpsc::channel::<Vec<u8>>(CHANNEL_CAP);
+            let disk_counter_w = disk_counter.clone();
+            let writer_task = tokio::spawn(async move {
+                let mut out = BufWriter::with_capacity(CHUNK_SIZE, out_file);
+                while let Some(chunk) = rx.recv().await {
+                    out.write_all(&chunk).await?;
+                    disk_counter_w.fetch_add(chunk.len() as u64, Ordering::Relaxed);
+                }
+                out.flush().await?;
+                Ok::<(), std::io::Error>(())
+            });
 
             // Count resumed bytes toward both per-file and total progress so
             // the bar starts where it left off instead of at zero.
@@ -319,37 +342,69 @@ async fn handle_connection(
             total_done = total_done.saturating_add(resume_offset);
             let mut remaining = header.file_size - resume_offset;
 
-            while remaining > 0 {
-                let want = remaining.min(buf.len() as u64) as usize;
-                let n = reader.read(&mut buf[..want]).await?;
-                if n == 0 {
-                    return Err(TransferError::Protocol("unexpected EOF in file body".into()));
+            let read_result = async {
+                while remaining > 0 {
+                    let want = remaining.min(buf.len() as u64) as usize;
+                    let n = reader.read(&mut buf[..want]).await?;
+                    if n == 0 {
+                        return Err(TransferError::Protocol(
+                            "unexpected EOF in file body".into(),
+                        ));
+                    }
+                    hasher.update(&buf[..n]);
+                    if tx.send(buf[..n].to_vec()).await.is_err() {
+                        return Err(TransferError::Protocol(
+                            "writer task ended unexpectedly".into(),
+                        ));
+                    }
+                    remaining -= n as u64;
+                    file_done += n as u64;
+                    total_done += n as u64;
+                    if last_emit.elapsed() >= PROGRESS_INTERVAL {
+                        let elapsed = last_emit.elapsed().as_secs_f64().max(0.001);
+                        let now_disk = disk_counter.load(Ordering::Relaxed);
+                        let inst_net = (total_done.saturating_sub(last_emit_net)) as f64
+                            / elapsed
+                            / (1024.0 * 1024.0);
+                        let inst_disk = (now_disk.saturating_sub(last_emit_disk)) as f64
+                            / elapsed
+                            / (1024.0 * 1024.0);
+                        last_emit = Instant::now();
+                        last_emit_net = total_done;
+                        last_emit_disk = now_disk;
+                        let _ = app.emit(
+                            EVT_TRANSFER_PROGRESS,
+                            TransferProgress {
+                                id: id.clone(),
+                                direction: "recv",
+                                current_file: safe_rel.to_string_lossy().into_owned(),
+                                current_bytes_done: file_done,
+                                current_bytes_total: header.file_size,
+                                total_bytes_done: total_done,
+                                total_bytes: total_bytes_expected,
+                                files_done,
+                                files_total,
+                                instant_mbps_network: inst_net,
+                                instant_mbps_disk: inst_disk,
+                            },
+                        );
+                    }
                 }
-                out.write_all(&buf[..n]).await?;
-                hasher.update(&buf[..n]);
-                remaining -= n as u64;
-                file_done += n as u64;
-                total_done += n as u64;
-                if last_emit.elapsed() >= PROGRESS_INTERVAL {
-                    last_emit = Instant::now();
-                    let _ = app.emit(
-                        EVT_TRANSFER_PROGRESS,
-                        TransferProgress {
-                            id: id.clone(),
-                            direction: "recv",
-                            current_file: safe_rel.to_string_lossy().into_owned(),
-                            current_bytes_done: file_done,
-                            current_bytes_total: header.file_size,
-                            total_bytes_done: total_done,
-                            total_bytes: total_bytes_expected,
-                            files_done,
-                            files_total,
-                        },
-                    );
-                }
+                Ok::<(), TransferError>(())
             }
-            out.flush().await?;
-            drop(out);
+            .await;
+
+            // Always drop the sender so the writer task drains and exits,
+            // even on error — otherwise the join would hang.
+            drop(tx);
+            let writer_join = writer_task.await;
+            // Propagate any read-side error before surfacing writer errors.
+            read_result?;
+            match writer_join {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => return Err(TransferError::Io(e)),
+                Err(e) => return Err(TransferError::Protocol(format!("writer panic: {e}"))),
+            }
 
             let mut received_hash = [0u8; HASH_LEN];
             reader.read_exact(&mut received_hash).await?;
@@ -378,6 +433,8 @@ async fn handle_connection(
                     total_bytes: total_bytes_expected,
                     files_done,
                     files_total,
+                    instant_mbps_network: 0.0,
+                    instant_mbps_disk: 0.0,
                 },
             );
         }

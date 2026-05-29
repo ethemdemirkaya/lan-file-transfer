@@ -37,6 +37,7 @@
     remove: "Entfernen",
   },
   step2: {
+    refresh: "Aktualisieren",
     label: "2 · An welches Gerät",
     toggleManual: "Manuelle IP",
     toggleList: "Liste",
@@ -57,7 +58,7 @@
     needCode: "Gib den 6-stelligen Code ein.",
     receiverFailed: "Empfänger konnte nicht gestartet werden: {{error}}",
   },
-  active: { label: "Aktive Übertragungen", send: "↑ Senden", recv: "↓ Empfangen", files: "Dateien" },
+  active: { remaining_other: "{{count}} verbleibend", disk: "Disk", remaining_one: "{{count}} verbleibend", network: "Netz", avg: "Durchschnitt", label: "Aktive Übertragungen", send: "↑ Senden", recv: "↓ Empfangen", files: "Dateien" },
   history: { label: "Letzte Übertragungen", success: "Fertig" },
   incoming: {
     trustCheck: "Diesem Gerät immer vertrauen",

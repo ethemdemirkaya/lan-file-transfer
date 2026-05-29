@@ -37,6 +37,7 @@
     remove: "Retirer",
   },
   step2: {
+    refresh: "Actualiser",
     label: "2 · Quel appareil",
     toggleManual: "IP manuelle",
     toggleList: "Liste",
@@ -57,7 +58,7 @@
     needCode: "Saisis le code à 6 chiffres.",
     receiverFailed: "Impossible de démarrer le récepteur : {{error}}",
   },
-  active: { label: "Transferts en cours", send: "↑ Envoi", recv: "↓ Réception", files: "fichiers" },
+  active: { remaining_other: "{{count}} restants", disk: "disque", remaining_one: "{{count}} restant", network: "réseau", avg: "moyenne", label: "Transferts en cours", send: "↑ Envoi", recv: "↓ Réception", files: "fichiers" },
   history: { label: "Transferts récents", success: "Terminé" },
   incoming: {
     trustCheck: "Toujours faire confiance à cet appareil",
