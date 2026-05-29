@@ -69,7 +69,8 @@
     overrideButton: "حفظ في مجلد آخر",
     accept: "قبول",
     reject: "رفض",
-  },  settings: {"title":"الإعدادات","appearance":"المظهر","theme":"السمة","themeSystem":"نظام","themeLight":"فاتح","themeDark":"داكن","notifications":"الإشعارات والصوت","soundEnabled":"تشغيل صوت عند الاستقبال","notificationsEnabled":"إظهار إشعارات النظام","behaviour":"السلوك","autoStart":"تشغيل LanBlaze عند بدء التشغيل","closeToTray":"الاستمرار في شريط النظام عند إغلاق النافذة","trustedDevices":"الأجهزة الموثوقة","trustedEmpty":"لا توجد بعد. حدّد «الثقة دائماً» عند قبول عملية نقل.","untrust":"إزالة","recent":"النشاط الأخير","recentEmpty":"لا شيء بعد.","clear":"مسح","close":"إغلاق"},
+  },  settings: {"title":"الإعدادات","appearance":"المظهر","theme":"السمة","themeSystem":"نظام","themeLight":"فاتح","themeDark":"داكن","notifications":"الإشعارات والصوت","soundEnabled":"تشغيل صوت عند الاستقبال","notificationsEnabled":"إظهار إشعارات النظام","behaviour":"السلوك","autoStart":"تشغيل LanBlaze عند بدء التشغيل","closeToTray":"الاستمرار في شريط النظام عند إغلاق النافذة","trustedDevices":"الأجهزة الموثوقة","trustedEmpty":"لا توجد بعد. حدّد «الثقة دائماً» عند قبول عملية نقل.","untrust":"إزالة","recent":"النشاط الأخير","recentEmpty":"لا شيء بعد.","clear":"مسح","close":"إغلاق"},  update: { download: "تنزيل", dismiss: "تجاهل", checking: "جاري التحقق من التحديثات…", upToDate: "أنت على آخر إصدار", sectionLabel: "التحديثات", viewNotes: "ملاحظات الإصدار", available: "LanBlaze {{version}} متاح", checkNow: "البحث عن تحديثات" },
+
 
   lang: { label: "اللغة" },
 };

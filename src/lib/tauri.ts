@@ -124,6 +124,54 @@ export const ensureReceiver = () => invoke<number>("ensure_receiver");
 export const showMainWindow = () => invoke<void>("show_main_window");
 export const refreshDiscovery = () => invoke<void>("refresh_discovery");
 export const cancelTransfer = (id: string) => invoke<void>("cancel_transfer", { id });
+export const openExternalUrl = (url: string) => invoke<void>("open_external_url", { url });
+
+const UPDATE_FEED_URL =
+  "https://api.github.com/repos/ethemdemirkaya/lan-file-transfer/releases/latest";
+
+export interface UpdateInfo {
+  version: string;
+  htmlUrl: string;
+  notes: string;
+  publishedAt: string;
+}
+
+/// Returns the latest release on GitHub when its tag is newer than the
+/// running version, otherwise null. Network failures and unparseable
+/// versions resolve to null — this never throws so the UI can call it
+/// from useEffect without try/catch.
+export async function checkForUpdate(currentVersion: string): Promise<UpdateInfo | null> {
+  try {
+    const res = await fetch(UPDATE_FEED_URL, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const tag = String(data.tag_name ?? "").replace(/^v/, "");
+    if (!tag) return null;
+    if (compareSemver(tag, currentVersion) <= 0) return null;
+    return {
+      version: tag,
+      htmlUrl: String(data.html_url ?? ""),
+      notes: String(data.body ?? ""),
+      publishedAt: String(data.published_at ?? ""),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function compareSemver(a: string, b: string): number {
+  const pa = a.split(/[.\-+]/).map((s) => Number(s) || 0);
+  const pb = b.split(/[.\-+]/).map((s) => Number(s) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const da = pa[i] ?? 0;
+    const db = pb[i] ?? 0;
+    if (da > db) return 1;
+    if (da < db) return -1;
+  }
+  return 0;
+}
 export const respondIncoming = (
   id: string,
   accept: boolean,

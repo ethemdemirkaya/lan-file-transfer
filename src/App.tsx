@@ -65,13 +65,17 @@ import {
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
+import { getVersion as tauriGetVersion } from "@tauri-apps/api/app";
 import {
   cancelTransfer,
+  checkForUpdate,
   clearHistory,
   ensureReceiver,
   getHistory,
   getSession,
   HistoryRecord,
+  openExternalUrl,
+  UpdateInfo,
   IncomingRequest,
   onIncomingRequest,
   onPeerAdded,
@@ -529,6 +533,30 @@ function SettingsDrawer({
   const styles = useStyles();
   const { t } = useTranslation();
   const [history, setHistory] = useState<HistoryRecord[]>([]);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<string | null>(null);
+  const [updateAvailable, setUpdateAvailable] = useState<UpdateInfo | null>(null);
+
+  const onCheckUpdate = async () => {
+    setUpdateBusy(true);
+    setUpdateStatus(t("update.checking"));
+    setUpdateAvailable(null);
+    try {
+      const current = await tauriGetVersion();
+      const info = await checkForUpdate(current);
+      localStorage.setItem("update.lastCheck", Date.now().toString());
+      if (info) {
+        setUpdateAvailable(info);
+        setUpdateStatus(null);
+      } else {
+        setUpdateStatus(t("update.upToDate"));
+      }
+    } catch (e) {
+      setUpdateStatus(String(e));
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -644,6 +672,40 @@ function SettingsDrawer({
         </div>
 
         <div className={styles.settingsSection}>
+          <span className={styles.sectionLabel}>{t("update.sectionLabel")}</span>
+          <div className={styles.settingsRow}>
+            <Button
+              icon={<ArrowSync20Regular />}
+              onClick={onCheckUpdate}
+              disabled={updateBusy}
+            >
+              {updateBusy ? t("update.checking") : t("update.checkNow")}
+            </Button>
+            {updateStatus && (
+              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                {updateStatus}
+              </Caption1>
+            )}
+          </div>
+          {updateAvailable && (
+            <MessageBar intent="info">
+              <MessageBarBody>
+                <MessageBarTitle>
+                  {t("update.available", { version: updateAvailable.version })}
+                </MessageBarTitle>
+              </MessageBarBody>
+              <Button
+                appearance="primary"
+                size="small"
+                onClick={() => openExternalUrl(updateAvailable.htmlUrl).catch(console.error)}
+              >
+                {t("update.download")}
+              </Button>
+            </MessageBar>
+          )}
+        </div>
+
+        <div className={styles.settingsSection}>
           <div className={styles.settingsRow}>
             <span className={styles.sectionLabel}>{t("settings.recent")}</span>
             {history.length > 0 && (
@@ -694,6 +756,7 @@ function App() {
   const [active, setActive] = useState<Record<string, ActiveTransfer>>({});
   const [incoming, setIncoming] = useState<IncomingPending | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
 
   const theme = useEffectiveTheme(session?.settings.theme);
 
@@ -721,6 +784,26 @@ function App() {
         }
         setSession(s);
       } catch (e) { console.error(e); }
+    })();
+  }, []);
+
+  // Update check on startup, throttled to once per 12 hours.
+  useEffect(() => {
+    (async () => {
+      const TWELVE_HOURS = 12 * 60 * 60 * 1000;
+      const last = Number(localStorage.getItem("update.lastCheck") ?? "0");
+      if (Date.now() - last < TWELVE_HOURS) return;
+      try {
+        const current = await tauriGetVersion();
+        const info = await checkForUpdate(current);
+        localStorage.setItem("update.lastCheck", Date.now().toString());
+        if (info) {
+          const dismissed = localStorage.getItem("update.dismissed");
+          if (dismissed !== info.version) setUpdate(info);
+        }
+      } catch (e) {
+        console.warn("update check failed:", e);
+      }
     })();
   }, []);
 
@@ -973,6 +1056,42 @@ function App() {
         </div>
 
         <div className={styles.main}>
+          {update && (
+            <MessageBar intent="info">
+              <MessageBarBody>
+                <MessageBarTitle>
+                  {t("update.available", { version: update.version })}
+                </MessageBarTitle>
+              </MessageBarBody>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <Button
+                  appearance="primary"
+                  size="small"
+                  onClick={() => openExternalUrl(update.htmlUrl).catch(console.error)}
+                >
+                  {t("update.download")}
+                </Button>
+                <Button
+                  appearance="subtle"
+                  size="small"
+                  onClick={() => openExternalUrl(update.htmlUrl).catch(console.error)}
+                >
+                  {t("update.viewNotes")}
+                </Button>
+                <Button
+                  appearance="transparent"
+                  size="small"
+                  icon={<Dismiss20Regular />}
+                  aria-label={t("update.dismiss")}
+                  onClick={() => {
+                    localStorage.setItem("update.dismissed", update.version);
+                    setUpdate(null);
+                  }}
+                />
+              </div>
+            </MessageBar>
+          )}
+
           <div style={{ display: "flex", alignItems: "center", gap: 8, color: tokens.colorNeutralForeground3, fontSize: 13 }}>
             <Folder20Regular />
             <span>{t("receiveFolder.label")}: {session.settings.saveDir}</span>

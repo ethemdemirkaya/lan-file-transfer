@@ -188,6 +188,38 @@ fn refresh_discovery(app: AppHandle, discovery: State<'_, Discovery>) -> Result<
 }
 
 #[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    // Defence-in-depth: only allow http/https so a misbehaving frontend
+    // can't talk us into running arbitrary commands via a `file://` or
+    // protocol-scheme handler.
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("Only http(s) URLs are allowed".into());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/c", "start", "", &url])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn cancel_transfer(state: State<'_, AppState>, id: String) -> Result<(), String> {
     let tx = state.cancel.lock().unwrap().remove(&id);
     if let Some(tx) = tx {
@@ -480,6 +512,7 @@ pub fn run() {
             show_main_window,
             refresh_discovery,
             cancel_transfer,
+            open_external_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

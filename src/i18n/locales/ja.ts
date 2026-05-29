@@ -69,7 +69,8 @@
     overrideButton: "別のフォルダーに保存",
     accept: "承認",
     reject: "拒否",
-  },  settings: {"title":"設定","appearance":"外観","theme":"テーマ","themeSystem":"システム","themeLight":"ライト","themeDark":"ダーク","notifications":"通知と音","soundEnabled":"受信時に音を鳴らす","notificationsEnabled":"システム通知を表示","behaviour":"動作","autoStart":"サインイン時にLanBlazeを起動","closeToTray":"ウィンドウを閉じてもトレイで継続","trustedDevices":"信頼済み端末","trustedEmpty":"まだありません。受信時に「常に信頼する」をチェックしてください。","untrust":"削除","recent":"最近の履歴","recentEmpty":"まだありません。","clear":"クリア","close":"閉じる"},
+  },  settings: {"title":"設定","appearance":"外観","theme":"テーマ","themeSystem":"システム","themeLight":"ライト","themeDark":"ダーク","notifications":"通知と音","soundEnabled":"受信時に音を鳴らす","notificationsEnabled":"システム通知を表示","behaviour":"動作","autoStart":"サインイン時にLanBlazeを起動","closeToTray":"ウィンドウを閉じてもトレイで継続","trustedDevices":"信頼済み端末","trustedEmpty":"まだありません。受信時に「常に信頼する」をチェックしてください。","untrust":"削除","recent":"最近の履歴","recentEmpty":"まだありません。","clear":"クリア","close":"閉じる"},  update: { download: "ダウンロード", dismiss: "閉じる", checking: "アップデートを確認中…", upToDate: "最新の状態です", sectionLabel: "アップデート", viewNotes: "リリースノート", available: "LanBlaze {{version}} が利用可能", checkNow: "アップデートを確認" },
+
 
   lang: { label: "言語" },
 };

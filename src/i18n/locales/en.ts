@@ -69,7 +69,8 @@
     overrideButton: "Save somewhere else",
     accept: "Accept",
     reject: "Reject",
-  },  settings: {"title":"Settings","appearance":"Appearance","theme":"Theme","themeSystem":"System","themeLight":"Light","themeDark":"Dark","notifications":"Notifications \u0026 sound","soundEnabled":"Play a sound on incoming transfers","notificationsEnabled":"Show system notifications","behaviour":"Behaviour","autoStart":"Start LanBlaze when I sign in","closeToTray":"Keep running in the tray when I close the window","trustedDevices":"Trusted devices","trustedEmpty":"No trusted devices yet. Tick \u0027Always trust\u0027 when you accept a transfer.","untrust":"Remove","recent":"Recent activity","recentEmpty":"Nothing yet.","clear":"Clear","close":"Close"},
+  },  settings: {"title":"Settings","appearance":"Appearance","theme":"Theme","themeSystem":"System","themeLight":"Light","themeDark":"Dark","notifications":"Notifications \u0026 sound","soundEnabled":"Play a sound on incoming transfers","notificationsEnabled":"Show system notifications","behaviour":"Behaviour","autoStart":"Start LanBlaze when I sign in","closeToTray":"Keep running in the tray when I close the window","trustedDevices":"Trusted devices","trustedEmpty":"No trusted devices yet. Tick \u0027Always trust\u0027 when you accept a transfer.","untrust":"Remove","recent":"Recent activity","recentEmpty":"Nothing yet.","clear":"Clear","close":"Close"},  update: { download: "Download", dismiss: "Dismiss", checking: "Checking for updates…", upToDate: "You\u0027re up to date", sectionLabel: "Updates", viewNotes: "Release notes", available: "LanBlaze {{version}} is available", checkNow: "Check for updates" },
+
 
   lang: { label: "Language" },
 };

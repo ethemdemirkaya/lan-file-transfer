@@ -69,7 +69,8 @@
     overrideButton: "Enregistrer ailleurs",
     accept: "Accepter",
     reject: "Refuser",
-  },  settings: {"title":"Paramètres","appearance":"Apparence","theme":"Thème","themeSystem":"Système","themeLight":"Clair","themeDark":"Sombre","notifications":"Notifications et son","soundEnabled":"Émettre un son pour les transferts entrants","notificationsEnabled":"Afficher les notifications système","behaviour":"Comportement","autoStart":"Démarrer LanBlaze à l\u0027ouverture de session","closeToTray":"Continuer dans la zone de notification à la fermeture","trustedDevices":"Appareils de confiance","trustedEmpty":"Aucun appareil de confiance. Coche \u0027Toujours faire confiance\u0027 lors d\u0027un transfert.","untrust":"Supprimer","recent":"Activité récente","recentEmpty":"Rien pour le moment.","clear":"Effacer","close":"Fermer"},
+  },  settings: {"title":"Paramètres","appearance":"Apparence","theme":"Thème","themeSystem":"Système","themeLight":"Clair","themeDark":"Sombre","notifications":"Notifications et son","soundEnabled":"Émettre un son pour les transferts entrants","notificationsEnabled":"Afficher les notifications système","behaviour":"Comportement","autoStart":"Démarrer LanBlaze à l\u0027ouverture de session","closeToTray":"Continuer dans la zone de notification à la fermeture","trustedDevices":"Appareils de confiance","trustedEmpty":"Aucun appareil de confiance. Coche \u0027Toujours faire confiance\u0027 lors d\u0027un transfert.","untrust":"Supprimer","recent":"Activité récente","recentEmpty":"Rien pour le moment.","clear":"Effacer","close":"Fermer"},  update: { download: "Télécharger", dismiss: "Ignorer", checking: "Recherche de mises à jour…", upToDate: "Tu es à jour", sectionLabel: "Mises à jour", viewNotes: "Notes de version", available: "LanBlaze {{version}} disponible", checkNow: "Vérifier les mises à jour" },
+
 
   lang: { label: "Langue" },
 };

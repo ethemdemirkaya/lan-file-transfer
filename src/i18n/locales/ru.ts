@@ -73,7 +73,8 @@
     overrideButton: "Сохранить в другую папку",
     accept: "Принять",
     reject: "Отклонить",
-  },  settings: {"title":"Настройки","appearance":"Внешний вид","theme":"Тема","themeSystem":"Системная","themeLight":"Светлая","themeDark":"Тёмная","notifications":"Уведомления и звук","soundEnabled":"Звук при входящих передачах","notificationsEnabled":"Системные уведомления","behaviour":"Поведение","autoStart":"Запускать LanBlaze при входе","closeToTray":"При закрытии окна оставаться в трее","trustedDevices":"Доверенные устройства","trustedEmpty":"Пока нет. Отметьте «Всегда доверять» при приёме передачи.","untrust":"Удалить","recent":"Недавняя активность","recentEmpty":"Пока ничего.","clear":"Очистить","close":"Закрыть"},
+  },  settings: {"title":"Настройки","appearance":"Внешний вид","theme":"Тема","themeSystem":"Системная","themeLight":"Светлая","themeDark":"Тёмная","notifications":"Уведомления и звук","soundEnabled":"Звук при входящих передачах","notificationsEnabled":"Системные уведомления","behaviour":"Поведение","autoStart":"Запускать LanBlaze при входе","closeToTray":"При закрытии окна оставаться в трее","trustedDevices":"Доверенные устройства","trustedEmpty":"Пока нет. Отметьте «Всегда доверять» при приёме передачи.","untrust":"Удалить","recent":"Недавняя активность","recentEmpty":"Пока ничего.","clear":"Очистить","close":"Закрыть"},  update: { download: "Скачать", dismiss: "Скрыть", checking: "Проверка обновлений…", upToDate: "Используется последняя версия", sectionLabel: "Обновления", viewNotes: "Заметки о выпуске", available: "Доступна версия LanBlaze {{version}}", checkNow: "Проверить обновления" },
+
 
   lang: { label: "Язык" },
 };
