@@ -20,7 +20,7 @@ use crate::hash::StreamHasher;
 use crate::history::{self, HistoryRecord};
 use crate::protocol::{Hello, HelloAck, CHUNK_SIZE, HASH_LEN};
 use crate::transfer::stream::write_resume_offset;
-use crate::state::{AppState, PendingDecision, UserDecision};
+use crate::state::{AppState, PauseToken, PendingDecision, UserDecision};
 use crate::transfer::stream::{read_file_header, read_json, write_json};
 use crate::transfer::{TransferError, TransferResult};
 use crate::{disk, settings};
@@ -250,9 +250,11 @@ async fn handle_connection(
     // side can abort the body loop. Sender side has its own registration
     // in run_send.
     let (cancel_tx, mut cancel_rx) = oneshot::channel::<()>();
+    let pause = Arc::new(PauseToken::default());
     {
         let state: tauri::State<'_, AppState> = app.state();
         state.cancel.lock().unwrap().insert(id.clone(), cancel_tx);
+        state.pause.lock().unwrap().insert(id.clone(), pause.clone());
     }
 
     let disk_counter = Arc::new(AtomicU64::new(0));
@@ -358,6 +360,7 @@ async fn handle_connection(
 
             let read_result = async {
                 while remaining > 0 {
+                    pause.wait_if_paused().await;
                     let want = remaining.min(buf.len() as u64) as usize;
                     let n = reader.read(&mut buf[..want]).await?;
                     if n == 0 {
@@ -467,10 +470,11 @@ async fn handle_connection(
         _ = &mut cancel_rx => (Err(TransferError::Cancelled), 0),
     };
 
-    // Drop the cancel handle.
+    // Drop the cancel + pause handles.
     {
         let state: tauri::State<'_, AppState> = app.state();
         state.cancel.lock().unwrap().remove(&id);
+        state.pause.lock().unwrap().remove(&id);
     }
 
     let elapsed_ms = started_at.elapsed().as_millis() as u64;

@@ -1,10 +1,36 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Notify};
 
 use crate::settings::UserSettings;
+
+/// Pause / resume signal for an in-flight transfer. Either side of a
+/// transfer registers one of these and the worker task awaits
+/// `notify.notified()` whenever `paused` is true. Local-only — the peer
+/// notices indirectly via TCP back-pressure.
+#[derive(Default)]
+pub struct PauseToken {
+    pub paused: AtomicBool,
+    pub notify: Notify,
+}
+
+impl PauseToken {
+    pub fn pause(&self) {
+        self.paused.store(true, Ordering::SeqCst);
+    }
+    pub fn resume(&self) {
+        self.paused.store(false, Ordering::SeqCst);
+        self.notify.notify_waiters();
+    }
+    pub async fn wait_if_paused(&self) {
+        while self.paused.load(Ordering::SeqCst) {
+            self.notify.notified().await;
+        }
+    }
+}
 
 pub struct AppState {
     pub receiver: Mutex<ReceiverState>,
@@ -15,6 +41,10 @@ pub struct AppState {
     /// UI's cancel button sends () through it and the worker task wakes
     /// up its `tokio::select!` to abort cleanly.
     pub cancel: Mutex<HashMap<String, oneshot::Sender<()>>>,
+    /// Per-transfer pause tokens. Worker tasks `.wait_if_paused().await`
+    /// at every chunk boundary; the UI flips `paused` and the worker
+    /// blocks until resume.
+    pub pause: Mutex<HashMap<String, Arc<PauseToken>>>,
 }
 
 pub struct PendingDecision {
@@ -51,6 +81,7 @@ impl AppState {
             }),
             pending: Mutex::new(HashMap::new()),
             cancel: Mutex::new(HashMap::new()),
+            pause: Mutex::new(HashMap::new()),
         }
     }
 }

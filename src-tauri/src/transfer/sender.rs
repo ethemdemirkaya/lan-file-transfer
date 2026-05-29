@@ -16,8 +16,9 @@ use crate::history::{self, HistoryRecord};
 use crate::protocol::{
     current_os, Hello, HelloAck, CHUNK_SIZE, PROTOCOL_VERSION, RESUME_THRESHOLD,
 };
-use crate::state::AppState;
+use crate::state::{AppState, PauseToken};
 use crate::transfer::stream::{read_json, read_resume_offset};
+use std::sync::Arc;
 use crate::transfer::{TransferError, TransferResult};
 use tauri::Manager;
 
@@ -82,23 +83,26 @@ pub async fn run_send(app: AppHandle, req: SendRequest) -> TransferResult<()> {
 
     // Register a cancel handle so the UI's stop button can abort us.
     let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
+    let pause = Arc::new(PauseToken::default());
     {
         let state: tauri::State<'_, AppState> = app.state();
         state.cancel.lock().unwrap().insert(id.clone(), cancel_tx);
+        state.pause.lock().unwrap().insert(id.clone(), pause.clone());
     }
 
-    let do_send_fut = do_send(&app, req, started_at, total_bytes, file_count, id.clone());
+    let do_send_fut = do_send(&app, req, started_at, total_bytes, file_count, id.clone(), pause);
     tokio::pin!(do_send_fut);
     let result: TransferResult<u64> = tokio::select! {
         r = &mut do_send_fut => r,
         _ = cancel_rx => Err(TransferError::Cancelled),
     };
 
-    // Drop the cancel handle regardless of outcome (idempotent if the
-    // command already pulled it out).
+    // Drop the cancel + pause handles regardless of outcome (idempotent
+    // if the command already pulled either out).
     {
         let state: tauri::State<'_, AppState> = app.state();
         state.cancel.lock().unwrap().remove(&id);
+        state.pause.lock().unwrap().remove(&id);
     }
 
     let elapsed_ms = started_at.elapsed().as_millis() as u64;
@@ -152,6 +156,7 @@ async fn do_send(
     total_bytes: u64,
     file_count: u64,
     id: String,
+    pause: Arc<PauseToken>,
 ) -> TransferResult<u64> {
     let stream = TcpStream::connect(&req.peer_addr).await?;
     stream.set_nodelay(true)?;
@@ -262,6 +267,9 @@ async fn do_send(
         let mut file = BufReader::with_capacity(CHUNK_SIZE, open_for_streaming(&item.local_path).await?);
 
         loop {
+            // Honour pause requests between chunks. wait_if_paused returns
+            // immediately when not paused, otherwise blocks on Notify.
+            pause.wait_if_paused().await;
             let n = file.read(&mut buf).await?;
             if n == 0 {
                 break;

@@ -69,7 +69,7 @@
     overrideButton: "保存到其他目录",
     accept: "接收",
     reject: "拒绝",
-  },  settings: {"title":"设置","appearance":"外观","theme":"主题","themeSystem":"跟随系统","themeLight":"浅色","themeDark":"深色","notifications":"通知和声音","soundEnabled":"收到传输时播放声音","notificationsEnabled":"显示系统通知","behaviour":"行为","autoStart":"登录时启动 LanBlaze","closeToTray":"关闭窗口后继续驻留托盘","trustedDevices":"受信任设备","trustedEmpty":"暂无。接收传输时勾选「始终信任」以添加。","untrust":"移除","recent":"最近活动","recentEmpty":"暂无。","clear":"清空","close":"关闭"},  update: { download: "下载", dismiss: "忽略", checking: "正在检查更新…", upToDate: "已是最新版本", sectionLabel: "更新", viewNotes: "发行说明", available: "LanBlaze {{version}} 可用", checkNow: "检查更新" },
+  },  settings: {"title":"设置","appearance":"外观","theme":"主题","themeSystem":"跟随系统","themeLight":"浅色","themeDark":"深色","useAccent":"使用系统主题色","notifications":"通知和声音","soundEnabled":"收到传输时播放声音","notificationsEnabled":"显示系统通知","behaviour":"行为","autoStart":"登录时启动 LanBlaze","closeToTray":"关闭窗口后继续驻留托盘","trustedDevices":"受信任设备","trustedEmpty":"暂无。接收传输时勾选「始终信任」以添加。","untrust":"移除","recent":"最近活动","recentEmpty":"暂无。","clear":"清空","close":"关闭"},  update: { download: "下载", dismiss: "忽略", checking: "正在检查更新…", upToDate: "已是最新版本", sectionLabel: "更新", viewNotes: "发行说明", available: "LanBlaze {{version}} 可用", checkNow: "检查更新" },
 
 
   lang: { label: "语言" },

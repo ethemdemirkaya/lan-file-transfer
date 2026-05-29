@@ -1,3 +1,4 @@
+mod accent;
 mod disk;
 mod discovery;
 mod events;
@@ -6,6 +7,7 @@ mod history;
 mod protocol;
 mod settings;
 mod state;
+mod taskbar;
 mod transfer;
 
 use std::path::PathBuf;
@@ -233,6 +235,56 @@ fn cancel_transfer(state: State<'_, AppState>, id: String) -> Result<(), String>
 }
 
 #[tauri::command]
+fn pause_transfer(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    if let Some(tok) = state.pause.lock().unwrap().get(&id).cloned() {
+        tok.paused.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn resume_transfer(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    if let Some(tok) = state.pause.lock().unwrap().get(&id).cloned() {
+        tok.paused.store(false, std::sync::atomic::Ordering::SeqCst);
+        tok.notify.notify_waiters();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_accent_color() -> Option<String> {
+    accent::read_accent_hex()
+}
+
+#[tauri::command]
+fn set_taskbar_progress(
+    app: AppHandle,
+    value: u64,
+    total: u64,
+    state: String,
+) -> Result<(), String> {
+    let st = match state.as_str() {
+        "normal" => taskbar::ProgressState::Normal,
+        "paused" => taskbar::ProgressState::Paused,
+        "indeterminate" => taskbar::ProgressState::Indeterminate,
+        _ => taskbar::ProgressState::None,
+    };
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(win) = app.get_webview_window("main") {
+            if let Ok(hwnd) = win.hwnd() {
+                taskbar::set_progress(hwnd.0 as isize, value, total, st);
+            }
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (app, value, total, st);
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn show_main_window(app: AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -412,6 +464,25 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
         ))
+        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // A second instance was launched (typically from the shell
+            // context menu). Surface the main window and forward its
+            // file arguments so the user lands on a pre-filled compose.
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+                let _ = win.unminimize();
+                let _ = win.set_focus();
+            }
+            let send_paths: Vec<String> = args
+                .into_iter()
+                .skip(1) // exe path
+                .filter(|a| !a.starts_with("--"))
+                .collect();
+            if !send_paths.is_empty() {
+                let _ = app.emit("shell://send-paths", send_paths);
+            }
+        }))
         .setup(|app| {
             let settings_dir = app
                 .path()
@@ -476,6 +547,22 @@ pub fn run() {
                 }
             }
 
+            // Shell context menu / drop on icon: first-instance startup
+            // also gets any path arguments. Forward them once the
+            // frontend has had a moment to subscribe.
+            let send_paths: Vec<String> = args
+                .into_iter()
+                .skip(1)
+                .filter(|a| !a.starts_with("--"))
+                .collect();
+            if !send_paths.is_empty() {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+                    let _ = handle.emit("shell://send-paths", send_paths);
+                });
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -512,7 +599,11 @@ pub fn run() {
             show_main_window,
             refresh_discovery,
             cancel_transfer,
+            pause_transfer,
+            resume_transfer,
             open_external_url,
+            get_accent_color,
+            set_taskbar_progress,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

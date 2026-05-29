@@ -57,7 +57,12 @@ import {
   LocalLanguage20Regular,
   Settings20Regular,
   Delete20Regular,
+  Pause20Regular,
+  Play20Regular,
+  Subtract20Regular,
+  Square20Regular,
 } from "@fluentui/react-icons";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
@@ -71,6 +76,7 @@ import {
   checkForUpdate,
   clearHistory,
   ensureReceiver,
+  getAccentColor,
   getHistory,
   getSession,
   HistoryRecord,
@@ -84,10 +90,12 @@ import {
   onTransferCompleted,
   onTransferProgress,
   onTransferStarted,
+  pauseTransfer,
   Peer,
   refreshDiscovery,
   regenerateCode,
   respondIncoming,
+  resumeTransfer,
   saveSettings,
   sendPaths,
   Session,
@@ -95,6 +103,7 @@ import {
   setCloseToTray,
   setNotificationsEnabled,
   setSoundEnabled,
+  setTaskbarProgress,
   setTheme,
   ThemePref,
   TransferCompleted,
@@ -113,6 +122,48 @@ import { SUPPORTED_LANGS, setLang } from "./i18n";
 
 const useStyles = makeStyles({
   app: { minHeight: "100vh", backgroundColor: "transparent", color: tokens.colorNeutralForeground1, display: "flex", flexDirection: "column" },
+  titleBar: {
+    height: "32px",
+    display: "flex",
+    alignItems: "stretch",
+    flexShrink: 0,
+    backgroundColor: "transparent",
+    userSelect: "none",
+  },
+  titleBarDrag: {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    paddingLeft: tokens.spacingHorizontalM,
+    fontSize: "12px",
+    color: tokens.colorNeutralForeground2,
+    fontWeight: 600,
+    letterSpacing: "0.02em",
+  },
+  titleBarControls: { display: "flex", alignItems: "stretch" },
+  winBtn: {
+    width: "46px",
+    height: "32px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+    borderTopStyle: "none",
+    borderRightStyle: "none",
+    borderBottomStyle: "none",
+    borderLeftStyle: "none",
+    cursor: "default",
+    color: tokens.colorNeutralForeground1,
+    transitionDuration: "100ms",
+    transitionProperty: "background-color",
+    ":hover": { backgroundColor: tokens.colorNeutralBackground2Hover },
+  },
+  winBtnClose: {
+    ":hover": {
+      backgroundColor: "#c42b1c",
+      color: "#ffffff",
+    },
+  },
   topbar: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
     ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalXXXL),
@@ -230,11 +281,47 @@ const useStyles = makeStyles({
 // Helpers
 // ---------------------------------------------------------------------------
 
-function useEffectiveTheme(pref: ThemePref | undefined): Theme {
+function shadeHex(hex: string, factor: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const adjust = (c: number) =>
+    Math.round(factor > 0 ? c + (255 - c) * factor : c * (1 + factor));
+  const clamp = (c: number) => Math.max(0, Math.min(255, c));
+  const hh = (n: number) => clamp(n).toString(16).padStart(2, "0");
+  return `#${hh(adjust(r))}${hh(adjust(g))}${hh(adjust(b))}`;
+}
+
+/// Override Fluent's brand colors with the supplied accent. Approximate
+/// the brand ramp by lighten/darken — Fluent's real BrandVariants would
+/// need a full 16-step HSL ramp; this is good enough for buttons,
+/// badges and progress.
+function applyAccentToTheme(base: Theme, accent: string | null): Theme {
+  if (!accent || !/^#[0-9A-Fa-f]{6}$/.test(accent)) return base;
+  return {
+    ...base,
+    colorBrandBackground: accent,
+    colorBrandBackgroundHover: shadeHex(accent, 0.12),
+    colorBrandBackgroundPressed: shadeHex(accent, -0.12),
+    colorBrandBackgroundSelected: shadeHex(accent, -0.05),
+    colorBrandForeground1: accent,
+    colorBrandForeground2: shadeHex(accent, -0.05),
+    colorBrandStroke1: accent,
+    colorBrandStroke2: shadeHex(accent, 0.3),
+    colorCompoundBrandBackground: accent,
+    colorCompoundBrandBackgroundHover: shadeHex(accent, 0.1),
+    colorCompoundBrandBackgroundPressed: shadeHex(accent, -0.1),
+    colorCompoundBrandForeground1: accent,
+    colorCompoundBrandStroke: accent,
+  };
+}
+
+function useEffectiveTheme(pref: ThemePref | undefined, accent: string | null): Theme {
   const compute = (): Theme => {
     const sysIsDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const want = pref === "system" || pref === undefined ? (sysIsDark ? "dark" : "light") : pref;
-    return want === "dark" ? webDarkTheme : webLightTheme;
+    const base = want === "dark" ? webDarkTheme : webLightTheme;
+    return applyAccentToTheme(base, accent);
   };
   const [theme, setTheme] = useState<Theme>(compute);
   useEffect(() => {
@@ -245,7 +332,7 @@ function useEffectiveTheme(pref: ThemePref | undefined): Theme {
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pref]);
+  }, [pref, accent]);
   return theme;
 }
 
@@ -339,6 +426,7 @@ interface ActiveTransfer {
   startedAt: number;
   instantNetwork: number;
   instantDisk: number;
+  paused: boolean;
 }
 
 interface IncomingPending {
@@ -350,6 +438,35 @@ interface IncomingPending {
 // ---------------------------------------------------------------------------
 // Language picker
 // ---------------------------------------------------------------------------
+
+function TitleBar() {
+  const styles = useStyles();
+  const onMin = () => getCurrentWebviewWindow().minimize().catch(() => {});
+  const onMax = () => getCurrentWebviewWindow().toggleMaximize().catch(() => {});
+  const onClose = () => getCurrentWebviewWindow().close().catch(() => {});
+  return (
+    <div className={styles.titleBar}>
+      <div className={styles.titleBarDrag} data-tauri-drag-region>
+        LanBlaze
+      </div>
+      <div className={styles.titleBarControls}>
+        <button className={styles.winBtn} onClick={onMin} aria-label="Minimize">
+          <Subtract20Regular />
+        </button>
+        <button className={styles.winBtn} onClick={onMax} aria-label="Maximize">
+          <Square20Regular />
+        </button>
+        <button
+          className={`${styles.winBtn} ${styles.winBtnClose}`}
+          onClick={onClose}
+          aria-label="Close"
+        >
+          <Dismiss20Regular />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function LanguagePicker() {
   const { i18n } = useTranslation();
@@ -378,7 +495,7 @@ function LanguagePicker() {
 
 function SetupWizard({ initial, onDone }: { initial: Session; onDone: (s: Session) => void }) {
   const styles = useStyles();
-  const theme = useEffectiveTheme(initial.settings.theme);
+  const theme = useEffectiveTheme(initial.settings.theme, null);
   const { t } = useTranslation();
   const [name, setName] = useState(initial.settings.deviceName);
   const [dir, setDir] = useState(initial.settings.saveDir);
@@ -407,6 +524,7 @@ function SetupWizard({ initial, onDone }: { initial: Session; onDone: (s: Sessio
   return (
     <FluentProvider theme={theme} style={{ backgroundColor: "transparent" }}>
       <div className={styles.app}>
+        <TitleBar />
         <div style={{ display: "flex", justifyContent: "flex-end", padding: 12 }}>
           <LanguagePicker />
         </div>
@@ -526,9 +644,11 @@ function PeerTile({ peer, active, onSelect }: { peer: Peer; active: boolean; onS
 
 function SettingsDrawer({
   open: isOpen, onOpenChange, session, onSettingsUpdated,
+  useAccent, onToggleAccent, accentHex,
 }: {
   open: boolean; onOpenChange: (v: boolean) => void;
   session: Session; onSettingsUpdated: (s: UserSettings) => void;
+  useAccent: boolean; onToggleAccent: (v: boolean) => void; accentHex: string | null;
 }) {
   const styles = useStyles();
   const { t } = useTranslation();
@@ -623,6 +743,20 @@ function SettingsDrawer({
               <Radio value="dark" label={t("settings.themeDark")} />
             </RadioGroup>
           </Field>
+          <div className={styles.settingsRow}>
+            <span>
+              {t("settings.useAccent")}
+              {accentHex && (
+                <span style={{
+                  display: "inline-block", width: 12, height: 12,
+                  marginLeft: 8, borderRadius: 3, verticalAlign: "middle",
+                  backgroundColor: accentHex,
+                  border: `1px solid ${tokens.colorNeutralStroke2}`,
+                }} />
+              )}
+            </span>
+            <Switch checked={useAccent} onChange={(_, d) => onToggleAccent(d.checked)} />
+          </div>
         </div>
 
         <div className={styles.settingsSection}>
@@ -757,8 +891,12 @@ function App() {
   const [incoming, setIncoming] = useState<IncomingPending | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [accent, setAccent] = useState<string | null>(null);
+  const [useAccent, setUseAccent] = useState<boolean>(() => {
+    return localStorage.getItem("ui.useAccent") !== "false";
+  });
 
-  const theme = useEffectiveTheme(session?.settings.theme);
+  const theme = useEffectiveTheme(session?.settings.theme, useAccent ? accent : null);
 
   const [selectedPeer, setSelectedPeer] = useState<Peer | null>(null);
   const [manualIp, setManualIp] = useState("");
@@ -816,6 +954,23 @@ function App() {
     return () => { stop?.(); };
   }, []);
 
+  // Read Windows accent color on mount + every time the settings drawer
+  // closes (cheap, lets the UI pick up colour changes without polling).
+  useEffect(() => {
+    getAccentColor().then((c) => c && setAccent(c)).catch(() => {});
+  }, [showSettings]);
+
+  // Receive shell-context-menu / drag-onto-icon file arguments.
+  useEffect(() => {
+    let unlisten: Unlisten | undefined;
+    listen<string[]>("shell://send-paths", (e) => {
+      if (Array.isArray(e.payload) && e.payload.length > 0) {
+        setSelectedPaths((prev) => Array.from(new Set([...prev, ...e.payload])));
+      }
+    }).then((u) => { unlisten = u; });
+    return () => { unlisten?.(); };
+  }, []);
+
   // Subscriptions.
   useEffect(() => {
     const unsubs: Promise<Unlisten>[] = [];
@@ -827,7 +982,7 @@ function App() {
           filesTotal: e.fileCount, filesDone: 0,
           totalBytes: e.totalBytes, totalBytesDone: 0,
           currentFile: "", startedAt: performance.now(),
-          instantNetwork: 0, instantDisk: 0,
+          instantNetwork: 0, instantDisk: 0, paused: false,
         },
       }));
     }));
@@ -904,6 +1059,19 @@ function App() {
   const peerList = useMemo(() => Object.values(peers), [peers]);
   const activeList = useMemo(() => Object.values(active), [active]);
 
+  // Drive the Windows taskbar progress overlay from whichever transfer
+  // is currently most advanced (or all of them combined).
+  useEffect(() => {
+    if (activeList.length === 0) {
+      setTaskbarProgress(0, 1, "none").catch(() => {});
+      return;
+    }
+    const totalBytes = activeList.reduce((s, a) => s + a.totalBytes, 0);
+    const doneBytes = activeList.reduce((s, a) => s + a.totalBytesDone, 0);
+    const anyPaused = activeList.some((a) => a.paused);
+    setTaskbarProgress(doneBytes, totalBytes, anyPaused ? "paused" : "normal").catch(() => {});
+  }, [activeList]);
+
   const handleRegenerate = async () => {
     const code = await regenerateCode();
     setSession((s) => (s ? { ...s, authCode: code } : s));
@@ -942,6 +1110,27 @@ function App() {
   const startReceiverNow = async () => {
     try { await ensureReceiver(); setSession(await getSession()); }
     catch (e) { console.error(e); }
+  };
+
+  const togglePauseTransfer = async (a: ActiveTransfer) => {
+    try {
+      if (a.paused) {
+        await resumeTransfer(a.id);
+      } else {
+        await pauseTransfer(a.id);
+      }
+      setActive((prev) => {
+        const cur = prev[a.id]; if (!cur) return prev;
+        return { ...prev, [a.id]: { ...cur, paused: !cur.paused } };
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleToggleAccent = (v: boolean) => {
+    setUseAccent(v);
+    try { localStorage.setItem("ui.useAccent", v ? "true" : "false"); } catch {}
   };
 
   const handleSend = async () => {
@@ -990,8 +1179,11 @@ function App() {
   if (!session) {
     return (
       <FluentProvider theme={theme} style={{ backgroundColor: "transparent" }}>
-        <div className={styles.app} style={{ alignItems: "center", justifyContent: "center" }}>
-          <Spinner label={t("common.busy")} />
+        <div className={styles.app}>
+          <TitleBar />
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Spinner label={t("common.busy")} />
+          </div>
         </div>
       </FluentProvider>
     );
@@ -1010,6 +1202,7 @@ function App() {
   return (
     <FluentProvider theme={theme} style={{ backgroundColor: "transparent" }}>
       <div className={styles.app}>
+        <TitleBar />
         <div className={styles.topbar}>
           <div className={styles.topbarLeft}>
             <div className={styles.brand}>{t("setup.brand")}</div>
@@ -1199,16 +1392,35 @@ function App() {
                     <div className={styles.transferHeader}>
                       <Body1Strong>
                         {a.direction === "send" ? t("active.send") : t("active.recv")} — {a.peer}
+                        {a.paused && (
+                          <span style={{ marginLeft: 8, color: tokens.colorPaletteYellowForeground1, fontSize: 12 }}>
+                            · {t("active.paused")}
+                          </span>
+                        )}
                       </Body1Strong>
-                      <Tooltip content={t("active.cancel")} relationship="label">
-                        <Button
-                          size="small"
-                          appearance="subtle"
-                          icon={<Dismiss20Regular />}
-                          onClick={() => cancelTransfer(a.id).catch(console.error)}
-                          aria-label={t("active.cancel")}
-                        />
-                      </Tooltip>
+                      <span style={{ display: "flex", gap: 4 }}>
+                        <Tooltip
+                          content={a.paused ? t("active.resume") : t("active.pause")}
+                          relationship="label"
+                        >
+                          <Button
+                            size="small"
+                            appearance="subtle"
+                            icon={a.paused ? <Play20Regular /> : <Pause20Regular />}
+                            onClick={() => togglePauseTransfer(a)}
+                            aria-label={a.paused ? t("active.resume") : t("active.pause")}
+                          />
+                        </Tooltip>
+                        <Tooltip content={t("active.cancel")} relationship="label">
+                          <Button
+                            size="small"
+                            appearance="subtle"
+                            icon={<Dismiss20Regular />}
+                            onClick={() => cancelTransfer(a.id).catch(console.error)}
+                            aria-label={t("active.cancel")}
+                          />
+                        </Tooltip>
+                      </span>
                     </div>
                     <ProgressBar value={ratio} thickness="medium" />
                     <div className={styles.metricsRow}>
@@ -1324,6 +1536,9 @@ function App() {
           onOpenChange={setShowSettings}
           session={session}
           onSettingsUpdated={(s) => setSession({ ...session, settings: s })}
+          useAccent={useAccent}
+          onToggleAccent={handleToggleAccent}
+          accentHex={accent}
         />
       </div>
     </FluentProvider>

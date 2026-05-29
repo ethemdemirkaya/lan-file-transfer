@@ -124,7 +124,17 @@ export const ensureReceiver = () => invoke<number>("ensure_receiver");
 export const showMainWindow = () => invoke<void>("show_main_window");
 export const refreshDiscovery = () => invoke<void>("refresh_discovery");
 export const cancelTransfer = (id: string) => invoke<void>("cancel_transfer", { id });
+export const pauseTransfer = (id: string) => invoke<void>("pause_transfer", { id });
+export const resumeTransfer = (id: string) => invoke<void>("resume_transfer", { id });
 export const openExternalUrl = (url: string) => invoke<void>("open_external_url", { url });
+export const getAccentColor = () => invoke<string | null>("get_accent_color");
+
+export type TaskbarState = "none" | "normal" | "paused" | "indeterminate";
+export const setTaskbarProgress = (
+  value: number,
+  total: number,
+  state: TaskbarState,
+) => invoke<void>("set_taskbar_progress", { value, total, state });
 
 const UPDATE_FEED_URL =
   "https://api.github.com/repos/ethemdemirkaya/lan-file-transfer/releases/latest";
