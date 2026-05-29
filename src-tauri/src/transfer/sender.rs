@@ -5,6 +5,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::TcpStream;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::events::{
     TransferCompleted, TransferProgress, TransferStarted, EVT_TRANSFER_COMPLETED,
@@ -16,9 +17,7 @@ use crate::protocol::{
     current_os, Hello, HelloAck, CHUNK_SIZE, PROTOCOL_VERSION, RESUME_THRESHOLD,
 };
 use crate::state::AppState;
-use crate::transfer::stream::{
-    read_json, read_resume_offset, write_end_marker, write_file_header, write_json,
-};
+use crate::transfer::stream::{read_json, read_resume_offset};
 use crate::transfer::{TransferError, TransferResult};
 use tauri::Manager;
 
@@ -37,6 +36,42 @@ pub struct SendRequest {
 }
 
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(50);
+const SOCKET_BUFFER: usize = 4 * 1024 * 1024;
+const WRITER_QUEUE: usize = 16;
+
+/// Commands the read side sends to the dedicated write task.
+enum WriterCmd {
+    /// Append the bytes to the socket's BufWriter; flush happens lazily
+    /// when the buffer fills up.
+    Bytes(Vec<u8>),
+    /// Force a flush and notify on the oneshot — used right before we
+    /// expect to read a reply from the peer (e.g. the resume offset),
+    /// so the peer has actually seen our header.
+    FlushAndAck(oneshot::Sender<()>),
+}
+
+/// Windows `CreateFile` flag that asks the cache manager to optimise for
+/// sequential access — bigger read-ahead, lower cache pressure. Roughly
+/// 2-3× improvement when streaming many tiny files off NTFS.
+#[cfg(windows)]
+const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x0800_0000;
+
+async fn open_for_streaming(path: &Path) -> std::io::Result<File> {
+    let path = path.to_owned();
+    let std_file = tokio::task::spawn_blocking(move || {
+        let mut opts = std::fs::OpenOptions::new();
+        opts.read(true);
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            opts.custom_flags(FILE_FLAG_SEQUENTIAL_SCAN);
+        }
+        opts.open(path)
+    })
+    .await
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))??;
+    Ok(File::from_std(std_file))
+}
 
 pub async fn run_send(app: AppHandle, req: SendRequest) -> TransferResult<()> {
     let started_at = Instant::now();
@@ -96,10 +131,41 @@ async fn do_send(
 ) -> TransferResult<u64> {
     let stream = TcpStream::connect(&req.peer_addr).await?;
     stream.set_nodelay(true)?;
+    // Bigger socket buffers so the kernel keeps several megabytes in
+    // flight on our behalf — that's what lets the disk-read pipeline
+    // actually overlap the network send.
+    {
+        let sref = socket2::SockRef::from(&stream);
+        let _ = sref.set_send_buffer_size(SOCKET_BUFFER);
+        let _ = sref.set_recv_buffer_size(SOCKET_BUFFER);
+    }
+
     let (read_half, write_half) = stream.into_split();
     let mut reader = BufReader::with_capacity(CHUNK_SIZE, read_half);
-    let mut writer = BufWriter::with_capacity(CHUNK_SIZE, write_half);
 
+    // The write task runs the actual socket.write_all calls on its own
+    // tokio task. The read side feeds it via `wtx` and only blocks when
+    // the bounded channel fills (back-pressure). This is what lets us
+    // start opening / reading the *next* file while the *previous* file
+    // is still draining onto the wire — the big win for many-tiny-files.
+    let (wtx, mut wrx) = mpsc::channel::<WriterCmd>(WRITER_QUEUE);
+    let writer_task = tokio::spawn(async move {
+        let mut writer = BufWriter::with_capacity(CHUNK_SIZE, write_half);
+        while let Some(cmd) = wrx.recv().await {
+            match cmd {
+                WriterCmd::Bytes(b) => writer.write_all(&b).await?,
+                WriterCmd::FlushAndAck(ack) => {
+                    writer.flush().await?;
+                    let _ = ack.send(());
+                }
+            }
+        }
+        writer.flush().await?;
+        writer.shutdown().await.ok();
+        Ok::<(), std::io::Error>(())
+    });
+
+    // 1) Hello — length-prefixed JSON.
     let hello = Hello {
         version: PROTOCOL_VERSION,
         device_name: req.device_name.clone(),
@@ -108,11 +174,14 @@ async fn do_send(
         total_bytes,
         auth_code: req.auth_code.clone(),
     };
-    write_json(&mut writer, &hello).await?;
-    writer.flush().await?;
+    send_json(&wtx, &hello).await?;
+    flush_through_writer(&wtx).await?;
 
     let ack: HelloAck = read_json(&mut reader).await?;
     if !ack.accept {
+        // Drop the sender so the writer task exits cleanly before we bail.
+        drop(wtx);
+        let _ = writer_task.await;
         let reason = ack.reason.unwrap_or_else(|| "rejected".into());
         return Err(TransferError::Rejected(reason));
     }
@@ -136,22 +205,38 @@ async fn do_send(
 
     for item in &req.items {
         let resumable = item.size >= RESUME_THRESHOLD;
-        write_file_header(&mut writer, &item.rel_path, item.size, resumable).await?;
+
+        // Per-file header: u16 path_len, path bytes, u64 size, u8 resumable.
+        let path_bytes = item.rel_path.as_bytes();
+        if path_bytes.is_empty() || path_bytes.len() > u16::MAX as usize {
+            return Err(TransferError::Protocol(format!(
+                "invalid path: {}",
+                item.rel_path
+            )));
+        }
+        let mut header = Vec::with_capacity(2 + path_bytes.len() + 8 + 1);
+        header.extend_from_slice(&(path_bytes.len() as u16).to_le_bytes());
+        header.extend_from_slice(path_bytes);
+        header.extend_from_slice(&item.size.to_le_bytes());
+        header.push(u8::from(resumable));
+        send_bytes(&wtx, header).await?;
+
         let resume_offset = if resumable {
-            writer.flush().await?;
+            // Force a flush so the header actually lands on the wire before
+            // we wait for the peer's offset reply.
+            flush_through_writer(&wtx).await?;
             read_resume_offset(&mut reader).await?
         } else {
             0
         };
-        // Account already-transferred bytes for the global counter so the
-        // progress bar doesn't dip when a resumed file picks up mid-way.
         if resume_offset > 0 {
             total_done = total_done.saturating_add(resume_offset);
         }
 
         let mut hasher = StreamHasher::new();
-        let mut consumed: u64 = 0; // bytes read from the source file so far
-        let mut file = BufReader::with_capacity(CHUNK_SIZE, File::open(&item.local_path).await?);
+        let mut consumed: u64 = 0;
+        let mut file = BufReader::with_capacity(CHUNK_SIZE, open_for_streaming(&item.local_path).await?);
+
         loop {
             let n = file.read(&mut buf).await?;
             if n == 0 {
@@ -160,17 +245,20 @@ async fn do_send(
             hasher.update(&buf[..n]);
             let bytes_before = consumed;
             consumed += n as u64;
-            // Skip everything that the receiver already has on disk.
+
+            // Skip the bytes the receiver already has on disk; whatever is
+            // left of this chunk goes onto the wire.
             let skip_in_chunk = if bytes_before < resume_offset {
                 ((resume_offset - bytes_before).min(n as u64)) as usize
             } else {
                 0
             };
             if skip_in_chunk < n {
-                writer.write_all(&buf[skip_in_chunk..n]).await?;
+                send_bytes(&wtx, buf[skip_in_chunk..n].to_vec()).await?;
                 let sent = (n - skip_in_chunk) as u64;
                 total_done = total_done.saturating_add(sent);
             }
+
             if last_emit.elapsed() >= PROGRESS_INTERVAL {
                 let elapsed = last_emit.elapsed().as_secs_f64().max(0.001);
                 let inst = (total_done.saturating_sub(last_emit_bytes)) as f64
@@ -196,9 +284,10 @@ async fn do_send(
                 );
             }
         }
-        let hash = hasher.finalize();
-        writer.write_all(&hash).await?;
+
+        send_bytes(&wtx, hasher.finalize().to_vec()).await?;
         files_done += 1;
+
         let _ = app.emit(
             EVT_TRANSFER_PROGRESS,
             TransferProgress {
@@ -217,12 +306,45 @@ async fn do_send(
         );
     }
 
-    write_end_marker(&mut writer).await?;
-    writer.flush().await?;
-    writer.shutdown().await.ok();
+    // End-of-stream marker (u16 = 0).
+    send_bytes(&wtx, vec![0u8, 0u8]).await?;
 
-    let _ = id; // outer run_send emits the completion + history record
+    drop(wtx);
+    match writer_task.await {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => return Err(TransferError::Io(e)),
+        Err(e) => return Err(TransferError::Protocol(format!("writer panic: {e}"))),
+    }
+
     Ok(total_done)
+}
+
+async fn send_bytes(tx: &mpsc::Sender<WriterCmd>, bytes: Vec<u8>) -> TransferResult<()> {
+    tx.send(WriterCmd::Bytes(bytes))
+        .await
+        .map_err(|_| TransferError::Protocol("writer task ended".into()))
+}
+
+async fn send_json<T: serde::Serialize>(
+    tx: &mpsc::Sender<WriterCmd>,
+    value: &T,
+) -> TransferResult<()> {
+    let body = serde_json::to_vec(value)?;
+    let mut framed = Vec::with_capacity(4 + body.len());
+    framed.extend_from_slice(&(body.len() as u32).to_le_bytes());
+    framed.extend_from_slice(&body);
+    send_bytes(tx, framed).await
+}
+
+async fn flush_through_writer(tx: &mpsc::Sender<WriterCmd>) -> TransferResult<()> {
+    let (ack_tx, ack_rx) = oneshot::channel();
+    tx.send(WriterCmd::FlushAndAck(ack_tx))
+        .await
+        .map_err(|_| TransferError::Protocol("writer task ended".into()))?;
+    ack_rx
+        .await
+        .map_err(|_| TransferError::Protocol("writer task dropped flush ack".into()))?;
+    Ok(())
 }
 
 /// Build a SendRequest from a set of absolute local paths (files or

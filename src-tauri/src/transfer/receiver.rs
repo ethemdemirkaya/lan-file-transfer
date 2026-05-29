@@ -124,6 +124,13 @@ async fn handle_connection(
     save_dir: PathBuf,
 ) -> TransferResult<()> {
     sock.set_nodelay(true)?;
+    // 4 MB socket buffers — keeps several flights of file bodies in the
+    // kernel so the sender's pipelined read doesn't stall on TCP window.
+    {
+        let sref = socket2::SockRef::from(&sock);
+        let _ = sref.set_recv_buffer_size(4 * 1024 * 1024);
+        let _ = sref.set_send_buffer_size(4 * 1024 * 1024);
+    }
     let (read_half, write_half) = sock.into_split();
     let mut reader = BufReader::with_capacity(CHUNK_SIZE, read_half);
     let mut writer = BufWriter::with_capacity(CHUNK_SIZE, write_half);
