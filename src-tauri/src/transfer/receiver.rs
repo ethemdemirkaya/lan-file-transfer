@@ -199,9 +199,9 @@ async fn handle_connection(
     };
     let decision = if trusted {
         info!("auto-accepting trusted sender: {}", hello.device_name);
-        // Still emit the incoming request so the UI can show it as in-flight.
-        let _ = app.emit(EVT_INCOMING_REQUEST, &request);
-        // Then immediately resolve it on our own.
+        // Do NOT emit the incoming request — the UI would pop the accept
+        // dialog. The transfer://started event right after will surface
+        // the in-flight progress; that's enough.
         UserDecision { accept: true, override_save_dir: None }
     } else {
         await_user_decision(&app, &id, request).await
